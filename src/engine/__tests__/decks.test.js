@@ -7,9 +7,16 @@ describe('decks', () => {
     expect(Object.keys(DECKS)).toHaveLength(3)
   })
 
-  it('each deck has 30 cards', () => {
+  it('each deck has 24 cards (no lands)', () => {
     for (const [name, deck] of Object.entries(DECKS)) {
-      expect(deck.cards).toHaveLength(30)
+      expect(deck.cards).toHaveLength(24)
+    }
+  })
+
+  it('no deck contains colorless cards', () => {
+    for (const [name, deck] of Object.entries(DECKS)) {
+      const colorless = deck.cards.filter(c => c.color === 'colorless')
+      expect(colorless).toHaveLength(0)
     }
   })
 

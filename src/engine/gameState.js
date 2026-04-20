@@ -29,12 +29,51 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
   const p1Cards = shuffleArray(DECKS[p1DeckKey].cards.map(addId))
   const p2Cards = shuffleArray(DECKS[p2DeckKey].cards.map(addId))
 
+  // Pre-seed the board: 5 cards from each player (10 total out of 18 tiles)
+  // P1 seeds their half (rows 3-5), P2 seeds their half (rows 0-2)
+  const SEED_COUNT = 5
+  const p1SeedCards = p1Cards.splice(0, SEED_COUNT)
+  const p2SeedCards = p2Cards.splice(0, SEED_COUNT)
+
   const grid = Array.from({ length: ROWS }, () =>
     Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
   )
 
-  const p1Hand = p1Cards.splice(0, 3)
-  const p2Hand = p2Cards.splice(0, 3)
+  // Place P2's seed cards in rows 0-2 (their side) at random positions
+  const p2Positions = []
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < COLS; c++) {
+      p2Positions.push({ row: r, col: c })
+    }
+  }
+  shuffleArray(p2Positions)
+  for (let i = 0; i < SEED_COUNT && i < p2Positions.length; i++) {
+    const { row, col } = p2Positions[i]
+    const card = p2SeedCards[i]
+    const isCollege = !!card.college
+    const tileCard = isCollege ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
+    grid[row][col] = { color: card.color, card: tileCard }
+  }
+
+  // Place P1's seed cards in rows 3-5 (their side) at random positions
+  const p1Positions = []
+  for (let r = 3; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      p1Positions.push({ row: r, col: c })
+    }
+  }
+  shuffleArray(p1Positions)
+  for (let i = 0; i < SEED_COUNT && i < p1Positions.length; i++) {
+    const { row, col } = p1Positions[i]
+    const card = p1SeedCards[i]
+    const isCollege = !!card.college
+    const tileCard = isCollege ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
+    grid[row][col] = { color: card.color, card: tileCard }
+  }
+
+  // Deal 5 cards to each hand (bigger hand = more options per turn)
+  const p1Hand = p1Cards.splice(0, 5)
+  const p2Hand = p2Cards.splice(0, 5)
 
   return {
     grid,

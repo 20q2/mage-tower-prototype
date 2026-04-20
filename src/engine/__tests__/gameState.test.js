@@ -2,12 +2,18 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createInitialState, gameReducer } from '../gameState'
 
 describe('createInitialState', () => {
-  it('creates a 6x3 empty grid', () => {
+  it('creates a 6x3 pre-seeded grid', () => {
     const state = createInitialState('lorehold', 'witherbloom')
     expect(state.grid).toHaveLength(6)
     expect(state.grid[0]).toHaveLength(3)
-    expect(state.grid[0][0].color).toBe('empty')
-    expect(state.grid[0][0].card).toBe(null)
+    // Board has 10 pre-seeded tiles (5 per player)
+    let filledCount = 0
+    for (const row of state.grid) {
+      for (const tile of row) {
+        if (tile.color !== 'empty') filledCount++
+      }
+    }
+    expect(filledCount).toBe(10)
   })
 
   it('places mascots at correct starting positions', () => {
@@ -16,10 +22,10 @@ describe('createInitialState', () => {
     expect(state.mascots.p2).toEqual({ row: 5, col: 1 })
   })
 
-  it('deals 3 cards to each player', () => {
+  it('deals 5 cards to each player', () => {
     const state = createInitialState('lorehold', 'witherbloom')
-    expect(state.hands.p1).toHaveLength(3)
-    expect(state.hands.p2).toHaveLength(3)
+    expect(state.hands.p1).toHaveLength(5)
+    expect(state.hands.p2).toHaveLength(5)
   })
 
   it('starts on p1_draw phase', () => {
@@ -111,6 +117,8 @@ describe('gameReducer', () => {
   })
 
   it('PLAY_CARD on empty tile does not add null to discard', () => {
+    // Force an empty tile for this test
+    state.grid[2][1] = { color: 'empty', card: null }
     let next = gameReducer(state, { type: 'DRAW_CARD', payload: { player: 'p1' } })
     expect(next.grid[2][1].card).toBe(null)
     next = gameReducer(next, {

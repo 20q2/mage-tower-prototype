@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { createInitialState, gameReducer } from '../gameState'
+import { gameReducer } from '../gameState'
 import { getValidMoves } from '../rules'
-import { PHASES } from '../constants'
+import { PHASES, ROWS, COLS } from '../constants'
 
 function makeTile(color, name = 'Test') {
   return {
@@ -10,14 +10,35 @@ function makeTile(color, name = 'Test') {
   }
 }
 
+function emptyGrid() {
+  return Array.from({ length: ROWS }, () =>
+    Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
+  )
+}
+
 function stateWithTerrain(tiles) {
-  // Start from a clean state, then manually set grid tiles
-  const state = createInitialState('lorehold', 'witherbloom')
-  const grid = state.grid.map((r) => r.map((t) => ({ ...t })))
+  const grid = emptyGrid()
   for (const { row, col, color, name } of tiles) {
     grid[row][col] = makeTile(color, name || color)
   }
-  return { ...state, grid }
+  return {
+    grid,
+    mascots: { p1: { row: 0, col: 1 }, p2: { row: 5, col: 1 } },
+    hands: { p1: [], p2: [] },
+    decks: { p1: [], p2: [] },
+    discard: [],
+    phase: PHASES.P1_DRAW,
+    turnCount: 1,
+    winner: null,
+    pendingMoves: { p1: null, p2: null },
+    portalLinks: [],
+    silverquillImmunity: null,
+    prismariBoostRow: null,
+    blueBonusDraws: { p1: 0, p2: 0 },
+    pendingLateral: null,
+    pendingLateralPlayer: null,
+    log: [],
+  }
 }
 
 describe('tile effects through RESOLVE_MOVES', () => {
