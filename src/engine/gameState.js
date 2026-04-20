@@ -161,29 +161,55 @@ export function gameReducer(state, action) {
 
       // P1 moves P2's mascot (toward P2 goal = row 0)
       if (p1Move) {
-        newMascots.p2 = { row: p1Move.row, col: p1Move.col }
+        const targetTile = state.grid[p1Move.row][p1Move.col]
+        logEntries.push(`P1 pushes P2's mascot to (${p1Move.row},${p1Move.col}).`)
+
         const chain1 = resolveChain(
           state.grid, p1Move, 'p1', state.silverquillImmunity,
           { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
         )
         newMascots.p2 = chain1.finalPos
-        logEntries.push(`p1 pushes p2's mascot to (${p1Move.row},${p1Move.col}).`)
+
+        // Log tile effects
         if (chain1.steps.length > 1) {
-          logEntries.push(`Chain! ${chain1.steps.length} steps.`)
+          for (let i = 0; i < chain1.steps.length - 1; i++) {
+            const step = chain1.steps[i]
+            const tile = state.grid[step.row]?.[step.col]
+            if (tile && tile.color !== 'empty' && tile.color !== 'colorless') {
+              logEntries.push(`  ${tileEffectName(tile.color)} at (${step.row},${step.col})!`)
+            }
+          }
+          logEntries.push(`  → P2's mascot lands at (${chain1.finalPos.row},${chain1.finalPos.col})`)
+        }
+
+        if (chain1.lateralOptions?.length > 0) {
+          logEntries.push(`  White tile — lateral slide available!`)
         }
       }
 
       // P2 moves P1's mascot (toward P1 goal = row 5)
       if (p2Move) {
-        newMascots.p1 = { row: p2Move.row, col: p2Move.col }
+        logEntries.push(`P2 pushes P1's mascot to (${p2Move.row},${p2Move.col}).`)
+
         const chain2 = resolveChain(
           state.grid, p2Move, 'p2', state.silverquillImmunity,
           { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
         )
         newMascots.p1 = chain2.finalPos
-        logEntries.push(`p2 pushes p1's mascot to (${p2Move.row},${p2Move.col}).`)
+
         if (chain2.steps.length > 1) {
-          logEntries.push(`Chain! ${chain2.steps.length} steps.`)
+          for (let i = 0; i < chain2.steps.length - 1; i++) {
+            const step = chain2.steps[i]
+            const tile = state.grid[step.row]?.[step.col]
+            if (tile && tile.color !== 'empty' && tile.color !== 'colorless') {
+              logEntries.push(`  ${tileEffectName(tile.color)} at (${step.row},${step.col})!`)
+            }
+          }
+          logEntries.push(`  → P1's mascot lands at (${chain2.finalPos.row},${chain2.finalPos.col})`)
+        }
+
+        if (chain2.lateralOptions?.length > 0) {
+          logEntries.push(`  White tile — lateral slide available!`)
         }
       }
 
@@ -248,6 +274,17 @@ export function gameReducer(state, action) {
 
     default:
       return state
+  }
+}
+
+function tileEffectName(color) {
+  switch (color) {
+    case 'red': return 'Red tile — pushed forward'
+    case 'black': return 'Black tile — pushed backward'
+    case 'white': return 'White tile — lateral slide'
+    case 'green': return 'Green wall — blocked'
+    case 'blue': return 'Blue tile — portal'
+    default: return color
   }
 }
 
