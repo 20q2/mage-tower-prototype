@@ -11,31 +11,33 @@ export default function Board({ grid, mascots, validMoves, onTileClick }) {
     return null
   }
 
+  // Landscape layout: original rows (0-5) become visual columns (left to right)
+  // Original cols (0-2) become visual rows (top to bottom)
+  // CSS grid is 6 cols x 3 rows. Items placed in row-major order.
+  const tiles = []
+  for (let col = 0; col < COLS; col++) {
+    for (let row = 0; row < ROWS; row++) {
+      tiles.push(
+        <Tile
+          key={`${row}-${col}`}
+          tile={grid[row][col]}
+          row={row}
+          col={col}
+          mascotHere={getMascotAt(row, col)}
+          onTileClick={onTileClick}
+          isValidMove={validMoveSet.has(`${row},${col}`)}
+        />
+      )
+    }
+  }
+
   return (
-    <div className="board">
-      {/* P2 goal label */}
-      <div className="board__goal-label board__goal-label--p2">
-        ← P2 Goal →
+    <div className="board-wrapper">
+      <div className="board-goal board-goal--p2">P2 GOAL</div>
+      <div className="board-grid">
+        {tiles}
       </div>
-
-      {Array.from({ length: ROWS }, (_, row) =>
-        Array.from({ length: COLS }, (_, col) => (
-          <Tile
-            key={`${row}-${col}`}
-            tile={grid[row][col]}
-            row={row}
-            col={col}
-            mascotHere={getMascotAt(row, col)}
-            onTileClick={onTileClick}
-            isValidMove={validMoveSet.has(`${row},${col}`)}
-          />
-        ))
-      )}
-
-      {/* P1 goal label */}
-      <div className="board__goal-label board__goal-label--p1">
-        ← P1 Goal →
-      </div>
+      <div className="board-goal board-goal--p1">P1 GOAL</div>
     </div>
   )
 }
