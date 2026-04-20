@@ -1,4 +1,4 @@
-import { ROWS, COLS, MOVE_STEPS } from './constants'
+import { ROWS, COLS, ACTIONS_PER_TURN } from './constants'
 import { getValidMoves, resolveChain } from './rules'
 
 function jitter() {

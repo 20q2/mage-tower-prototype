@@ -1,7 +1,7 @@
 export const ROWS = 6
 export const COLS = 3
 export const CHAIN_CAP = 10
-export const MOVE_STEPS = 2
+export const ACTIONS_PER_TURN = 3
 
 export const COLORS = ['white', 'blue', 'black', 'red', 'green', 'colorless']
 
@@ -13,12 +13,10 @@ export const COLLEGES = {
   prismari: { colors: ['red', 'blue'], name: 'Prismari' },
 }
 
-// Alternating turns: Draw → Play 1 card → Move own mascot 2 steps → Resolve → Check win → Next player
+// Alternating turns: Draw → Act (3 actions: play cards or move) → Check win → Next player
 export const PHASES = {
   DRAW: 'draw',
-  PLAY: 'play',
-  MOVE: 'move',
-  RESOLVE: 'resolve',
+  ACT: 'act',       // Spend actions: play a card OR move 1 step
   CHECK_WIN: 'checkWin',
 }
 

@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { gameReducer } from '../gameState'
 import { getValidMoves, resolveTile, resolveChain, isPassable, checkWinCondition } from '../rules'
-import { PHASES, ROWS, COLS, MOVE_STEPS } from '../constants'
+import { PHASES, ROWS, COLS, ACTIONS_PER_TURN } from '../constants'
 
 function makeTile(color) {
   return { color, card: { name: color, color, scryfallName: 'Plains', displayName: color } }
@@ -25,13 +25,12 @@ function moveState(overrides = {}) {
     hands: { p1: [], p2: [] },
     decks: { p1: [], p2: [] },
     discard: [],
-    phase: PHASES.MOVE,
+    phase: PHASES.ACT,
     activePlayer: 'p1',
     firstPlayer: 'p1',
     turnCount: 1,
     winner: null,
-    movesRemaining: MOVE_STEPS,
-    hasPlayedCard: false,
+    actionsRemaining: ACTIONS_PER_TURN,
     portalLinks: [],
     silverquillImmunity: null,
     prismariBoostRow: null,
@@ -146,7 +145,7 @@ describe('WHITE terrain', () => {
     const state = moveState({
       mascots: { p1: { row: 3, col: 1 }, p2: { row: 0, col: 1 } },
       pendingLateral: [{ row: 3, col: 0 }, { row: 3, col: 2 }],
-      movesRemaining: 1,
+      actionsRemaining: 1,
     })
     const next = gameReducer(state, { type: 'RESOLVE_LATERAL', payload: { row: 3, col: 0 } })
     expect(next.mascots.p1).toEqual({ row: 3, col: 0 })
@@ -221,39 +220,35 @@ describe('Prismari boost row', () => {
 })
 
 // ============================
-// 2-STEP MOVEMENT
+// 3-ACTION SYSTEM
 // ============================
-describe('2-step movement', () => {
-  it('player can take 2 steps', () => {
+describe('3-action system', () => {
+  it('3 moves uses all actions', () => {
     const state = moveState()
     state.grid[4][1] = { color: 'empty', card: null }
     state.grid[3][1] = { color: 'empty', card: null }
+    state.grid[2][1] = { color: 'empty', card: null }
 
     let next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
-    expect(next.movesRemaining).toBe(1)
-    expect(next.phase).toBe('move') // Still moving
+    expect(next.actionsRemaining).toBe(2)
+    expect(next.phase).toBe('act')
 
     next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 3, col: 1 } })
-    expect(next.movesRemaining).toBe(0)
-    expect(next.phase).toBe('checkWin') // Done
-    expect(next.mascots.p1).toEqual({ row: 3, col: 1 })
+    expect(next.actionsRemaining).toBe(1)
+
+    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 2, col: 1 } })
+    expect(next.actionsRemaining).toBe(0)
+    expect(next.phase).toBe('checkWin')
+    expect(next.mascots.p1).toEqual({ row: 2, col: 1 })
   })
 
-  it('chain counts as move but can continue stepping after', () => {
+  it('chain still only costs 1 action', () => {
     const state = moveState()
-    state.grid[4][1] = makeTile('red') // Will push to row 3
-    // Step 1: move to (4,1) → chain to (3,1). Still have 1 step left.
+    state.grid[4][1] = makeTile('red')
     const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
     expect(next.mascots.p1).toEqual({ row: 3, col: 1 })
-    expect(next.movesRemaining).toBe(1) // Still 1 step left
-    expect(next.phase).toBe('move')
-  })
-
-  it('END_MOVE_PHASE skips remaining steps', () => {
-    const state = moveState()
-    const next = gameReducer(state, { type: 'END_MOVE_PHASE' })
-    expect(next.phase).toBe('checkWin')
-    expect(next.movesRemaining).toBe(0)
+    expect(next.actionsRemaining).toBe(2) // Chain didn't cost extra
+    expect(next.phase).toBe('act')
   })
 })
 
