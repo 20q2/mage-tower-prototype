@@ -1,8 +1,7 @@
+import { forwardRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { getScryfallImageUrl } from '../utils/scryfall'
-import Mascot from './Mascot'
 import { P1_GOAL_ROW, P2_GOAL_ROW } from '../engine/constants'
-import { useState } from 'react'
 
 const EFFECT_LABELS = {
   white: 'Slide L/R',
@@ -14,7 +13,7 @@ const EFFECT_LABELS = {
   empty: '',
 }
 
-export default function Tile({ tile, row, col, mascotHere, onTileClick, onDrop, isValidMove, isMiddleLane, canDrop }) {
+const Tile = forwardRef(function Tile({ tile, row, col, onTileClick, onDrop, isValidMove, isMiddleLane, canDrop, hasMascot }, ref) {
   const [imgFailed, setImgFailed] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
@@ -65,13 +64,14 @@ export default function Tile({ tile, row, col, mascotHere, onTileClick, onDrop, 
 
   return (
     <motion.div
+      ref={ref}
       className={[
         'tile',
         `tile--${colorClass}`,
         isGoalP1 && 'tile--goal-p1',
         isGoalP2 && 'tile--goal-p2',
         isValidMove && 'tile--valid-move',
-        mascotHere && 'tile--has-mascot',
+        hasMascot && 'tile--has-mascot',
         isMiddleLane && 'tile--middle-lane',
         dragOver && 'tile--drag-over',
       ]
@@ -102,7 +102,8 @@ export default function Tile({ tile, row, col, mascotHere, onTileClick, onDrop, 
 
       {displayName && <div className="tile__card-name">{displayName}</div>}
       {effectLabel && <div className="tile__effect-label">{effectLabel}</div>}
-      {mascotHere && <Mascot player={mascotHere} />}
     </motion.div>
   )
-}
+})
+
+export default Tile
