@@ -3,13 +3,11 @@ import { createInitialState, gameReducer } from '../gameState'
 import { PHASES, ACTIONS_PER_TURN } from '../constants'
 
 describe('createInitialState', () => {
-  it('creates a 6x3 pre-seeded grid', () => {
+  it('creates a 6x3 empty grid', () => {
     const state = createInitialState('lorehold', 'witherbloom')
     expect(state.grid).toHaveLength(6)
     expect(state.grid[0]).toHaveLength(3)
-    let filledCount = 0
-    for (const row of state.grid) for (const tile of row) if (tile.color !== 'empty') filledCount++
-    expect(filledCount).toBe(10)
+    for (const row of state.grid) for (const tile of row) expect(tile.color).toBe('empty')
   })
 
   it('mascots start at their own goal rows', () => {

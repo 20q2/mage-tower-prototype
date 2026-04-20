@@ -28,33 +28,10 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
   const p1Cards = shuffleArray(DECKS[p1DeckKey].cards.map(addId))
   const p2Cards = shuffleArray(DECKS[p2DeckKey].cards.map(addId))
 
-  const SEED_COUNT = 5
-  const p1SeedCards = p1Cards.splice(0, SEED_COUNT)
-  const p2SeedCards = p2Cards.splice(0, SEED_COUNT)
-
+  // Clean field — every tile is a player's decision
   const grid = Array.from({ length: ROWS }, () =>
     Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
   )
-
-  const p2Positions = []
-  for (let r = 0; r < 3; r++) for (let c = 0; c < COLS; c++) p2Positions.push({ row: r, col: c })
-  shuffleArray(p2Positions)
-  for (let i = 0; i < SEED_COUNT && i < p2Positions.length; i++) {
-    const { row, col } = p2Positions[i]
-    const card = p2SeedCards[i]
-    const tileCard = card.college ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
-    grid[row][col] = { color: card.color, card: tileCard }
-  }
-
-  const p1Positions = []
-  for (let r = 3; r < ROWS; r++) for (let c = 0; c < COLS; c++) p1Positions.push({ row: r, col: c })
-  shuffleArray(p1Positions)
-  for (let i = 0; i < SEED_COUNT && i < p1Positions.length; i++) {
-    const { row, col } = p1Positions[i]
-    const card = p1SeedCards[i]
-    const tileCard = card.college ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
-    grid[row][col] = { color: card.color, card: tileCard }
-  }
 
   const p1Hand = p1Cards.splice(0, 5)
   const p2Hand = p2Cards.splice(0, 5)
