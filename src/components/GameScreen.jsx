@@ -9,6 +9,8 @@ import { getValidMoves } from '../engine/rules'
 import { chooseCardPlay, chooseMove } from '../engine/ai'
 import { PHASES, ACTIONS_PER_TURN } from '../engine/constants'
 
+const COLOR_NAMES = { white: 'White', blue: 'Blue', black: 'Black', red: 'Red', green: 'Green' }
+
 export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const [state, dispatch] = useReducer(gameReducer, null, () =>
     createInitialState(p1Deck, p2Deck)
@@ -17,6 +19,8 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const [selectedCardIndex, setSelectedCardIndex] = useState(null)
   const [showPassScreen, setShowPassScreen] = useState(false)
   const [showLog, setShowLog] = useState(false)
+  // For college cards: { cardIndex, row, col, card } — waiting for player to choose mode
+  const [collegeChoice, setCollegeChoice] = useState(null)
   const logBottomRef = useRef(null)
   const aiActingRef = useRef(false)
 
@@ -29,7 +33,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const isAiTurn = isAI && activePlayer === 'p2'
   const isHumanTurn = !isAiTurn
 
-  const canAct = phase === PHASES.ACT && actionsRemaining > 0 && !winner && !pendingLateral
+  const canAct = phase === PHASES.ACT && actionsRemaining > 0 && !winner && !pendingLateral && !collegeChoice
   const canPlay = canAct && hands[activePlayer].length > 0
   const canMove = canAct
 
@@ -43,7 +47,6 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     if (showLog) logBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [log.length, showLog])
 
-  // Hot-seat pass screen
   useEffect(() => {
     if (mode === 'hotseat' && phase === PHASES.DRAW && turnCount > 1) setShowPassScreen(true)
   }, [activePlayer])
@@ -55,7 +58,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     return () => clearTimeout(t)
   }, [phase, winner, showPassScreen, activePlayer])
 
-  // AI: spend actions
+  // AI actions
   useEffect(() => {
     if (!isAiTurn || phase !== PHASES.ACT || winner || pendingLateral) return
     if (actionsRemaining <= 0) return
@@ -65,26 +68,31 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     const t = setTimeout(() => {
       const aiState = { ...state, activePlayer: 'p2' }
 
-      // Strategy: play a card if we have 2+ actions left, otherwise move
-      // (saves last actions for movement)
       if (actionsRemaining >= 2 && hands.p2.length > 0) {
         const play = chooseCardPlay(aiState)
         if (play) {
           const card = hands.p2[play.cardIndex]
-          dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col } })
-          if (card?.college) {
-            dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, play.row, play.col) } })
+          if (card.college) {
+            // AI picks: use as college effect ~40% of the time, otherwise pick best color
+            const useCollege = Math.random() < 0.4
+            if (useCollege) {
+              dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col, playMode: 'college' } })
+              dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, play.row, play.col) } })
+            } else {
+              // Pick whichever color helps more (simplified: pick color1)
+              dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col, playMode: 'color1' } })
+            }
+          } else {
+            dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col } })
           }
           return
         }
       }
 
-      // Move
       const move = chooseMove(aiState)
       if (move) {
         dispatch({ type: 'MOVE_MASCOT', payload: move })
       } else {
-        // No valid moves, end turn
         dispatch({ type: 'END_TURN' })
       }
     }, 600)
@@ -101,12 +109,23 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     return () => clearTimeout(t)
   }, [isAiTurn, pendingLateral, winner])
 
-  // Auto end turn when no actions left
+  // Auto end turn
   useEffect(() => {
     if (phase !== PHASES.CHECK_WIN || winner || pendingLateral) return
     const t = setTimeout(() => dispatch({ type: 'END_TURN' }), 500)
     return () => clearTimeout(t)
   }, [phase, winner, pendingLateral])
+
+  // Play a card at a position with a chosen mode
+  function playCard(cardIndex, row, col, playMode) {
+    const card = hands[activePlayer][cardIndex]
+    dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col, playMode } })
+    if (playMode === 'college' && card?.college) {
+      dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col) } })
+    }
+    setSelectedCardIndex(null)
+    setCollegeChoice(null)
+  }
 
   // Tile click
   const handleTileClick = useCallback((row, col) => {
@@ -119,14 +138,15 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
       return
     }
 
-    // Play card
+    // Place card
     if (canPlay && selectedCardIndex !== null) {
       const card = hands[activePlayer][selectedCardIndex]
-      dispatch({ type: 'PLAY_CARD', payload: { cardIndex: selectedCardIndex, row, col } })
-      if (card?.college) {
-        dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col) } })
+      if (card.college) {
+        // Show choice modal
+        setCollegeChoice({ cardIndex: selectedCardIndex, row, col, card })
+      } else {
+        playCard(selectedCardIndex, row, col)
       }
-      setSelectedCardIndex(null)
       return
     }
 
@@ -139,11 +159,12 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const handleDropCard = useCallback((cardIndex, row, col) => {
     if (!canPlay || !isHumanTurn || winner) return
     const card = hands[activePlayer][cardIndex]
-    dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col } })
-    if (card?.college) {
-      dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col) } })
+    if (card.college) {
+      setCollegeChoice({ cardIndex, row, col, card })
+      setSelectedCardIndex(null)
+    } else {
+      playCard(cardIndex, row, col)
     }
-    setSelectedCardIndex(null)
   }, [canPlay, isHumanTurn, winner, hands, activePlayer])
 
   const handleCardSelect = useCallback((index) => {
@@ -153,8 +174,6 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
 
   const playerColor = activePlayer === 'p1' ? '#4ade80' : '#a78bfa'
   const playerName = activePlayer === 'p1' ? 'Player 1' : 'Player 2'
-
-  // Action pips display
   const actionPips = Array.from({ length: ACTIONS_PER_TURN }, (_, i) => i < actionsRemaining)
 
   return (
@@ -168,8 +187,6 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
         <span style={{ fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: '16px', color: playerColor }}>
           {playerName}
         </span>
-
-        {/* Action pips */}
         {phase === PHASES.ACT && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             {actionPips.map((active, i) => (
@@ -180,15 +197,11 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
                 transition: 'all 0.2s ease',
               }} />
             ))}
-            <span style={{ color: 'var(--text-secondary)', fontSize: '11px', marginLeft: '4px' }}>
-              actions
-            </span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '11px', marginLeft: '4px' }}>actions</span>
           </div>
         )}
-
         {phase === PHASES.DRAW && <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Drawing...</span>}
         {isAiTurn && phase === PHASES.ACT && <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>AI thinking...</span>}
-
         <button
           onClick={() => setShowLog(v => !v)}
           style={{
@@ -221,6 +234,73 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
         </div>
       )}
 
+      {/* COLLEGE CHOICE MODAL */}
+      <AnimatePresence>
+        {collegeChoice && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
+            }}
+            onClick={() => setCollegeChoice(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--bg-medium)', borderRadius: '12px', padding: '24px',
+                border: '2px solid var(--accent-gold)', maxWidth: '360px', textAlign: 'center',
+              }}
+            >
+              <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--accent-gold)', marginBottom: '8px', fontSize: '16px' }}>
+                How to play {collegeChoice.card.name}?
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '16px' }}>
+                This is a {collegeChoice.card.college} card ({collegeChoice.card.collegeColors.map(c => COLOR_NAMES[c]).join('/')})
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  onClick={() => playCard(collegeChoice.cardIndex, collegeChoice.row, collegeChoice.col, 'college')}
+                  style={{
+                    background: 'var(--mtg-gold)', color: 'var(--bg-dark)', padding: '10px 16px',
+                    borderRadius: '6px', fontWeight: 700, fontSize: '13px', border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  {collegeChoice.card.college.charAt(0).toUpperCase() + collegeChoice.card.college.slice(1)} Effect
+                </button>
+                {collegeChoice.card.collegeColors.map((color, i) => (
+                  <button
+                    key={color}
+                    onClick={() => playCard(collegeChoice.cardIndex, collegeChoice.row, collegeChoice.col, i === 0 ? 'color1' : 'color2')}
+                    style={{
+                      background: `var(--mtg-${color})`, color: color === 'black' ? '#ccc' : 'var(--bg-dark)',
+                      padding: '10px 16px', borderRadius: '6px', fontWeight: 700, fontSize: '13px',
+                      border: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    Play as {COLOR_NAMES[color]} terrain
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCollegeChoice(null)}
+                  style={{
+                    background: 'none', color: 'var(--text-muted)', padding: '8px',
+                    fontSize: '12px', border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* BOTTOM BAR */}
       <div className="bottom-bar">
         <div className="controls-strip">
@@ -239,26 +319,25 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
               ))}
               <button className="btn btn--primary" onClick={() => {
                 setSelectedCardIndex(null)
-                // End turn early by going to CHECK_WIN
                 dispatch({ type: 'END_TURN' })
               }}>
                 End Turn
               </button>
             </>
           )}
-
           {pendingLateral && isHumanTurn && (
             <>
               <span className="hint" style={{ color: 'var(--accent-gold)' }}>White tile! Slide sideways?</span>
               <button className="btn" onClick={() => dispatch({ type: 'SKIP_LATERAL' })}>Skip</button>
             </>
           )}
-
+          {collegeChoice && (
+            <span className="hint" style={{ color: 'var(--accent-gold)' }}>Choose how to play this card...</span>
+          )}
           {phase === PHASES.DRAW && <span className="hint">Drawing...</span>}
           {isAiTurn && phase === PHASES.ACT && <span className="hint">Opponent's turn...</span>}
         </div>
 
-        {/* Hand — always visible during ACT phase */}
         {phase === PHASES.ACT && isHumanTurn && (
           <PlayerHand
             cards={hands[activePlayer]}

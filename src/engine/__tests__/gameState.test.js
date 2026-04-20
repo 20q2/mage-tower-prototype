@@ -16,10 +16,10 @@ describe('createInitialState', () => {
     expect(state.mascots.p2).toEqual({ row: 0, col: 1 })
   })
 
-  it('deals 5 cards to each player', () => {
+  it('deals 3 cards to each player', () => {
     const state = createInitialState('lorehold', 'witherbloom')
-    expect(state.hands.p1).toHaveLength(5)
-    expect(state.hands.p2).toHaveLength(5)
+    expect(state.hands.p1).toHaveLength(3)
+    expect(state.hands.p2).toHaveLength(3)
   })
 
   it('starts on draw phase', () => {

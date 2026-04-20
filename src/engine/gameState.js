@@ -33,8 +33,8 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
     Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
   )
 
-  const p1Hand = p1Cards.splice(0, 5)
-  const p2Hand = p2Cards.splice(0, 5)
+  const p1Hand = p1Cards.splice(0, 3)
+  const p2Hand = p2Cards.splice(0, 3)
 
   return {
     grid,
@@ -76,8 +76,11 @@ export function gameReducer(state, action) {
     }
 
     // Play a card = 1 action
+    // For college (dual-color) cards: playMode = 'college' | 'color1' | 'color2'
+    //   'college' = place as the college card with its special effect
+    //   'color1' / 'color2' = place as one of its two colors (basic land)
     case 'PLAY_CARD': {
-      const { cardIndex, row, col } = action.payload
+      const { cardIndex, row, col, playMode } = action.payload
       const hand = [...state.hands[activePlayer]]
       const card = hand[cardIndex]
       hand.splice(cardIndex, 1)
@@ -86,10 +89,26 @@ export function gameReducer(state, action) {
       const oldTileCard = grid[row][col].card
       const discard = oldTileCard ? [...state.discard, oldTileCard] : [...state.discard]
 
-      const tileCard = card.college
-        ? card
-        : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
-      grid[row][col] = { color: card.color, card: tileCard }
+      let tileColor, tileCard, logMsg
+      if (card.college && playMode === 'color1') {
+        tileColor = card.collegeColors[0]
+        tileCard = { ...card, displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
+        logMsg = `${activePlayer} plays ${card.name} as ${tileColor} at (${row},${col}).`
+      } else if (card.college && playMode === 'color2') {
+        tileColor = card.collegeColors[1]
+        tileCard = { ...card, displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
+        logMsg = `${activePlayer} plays ${card.name} as ${tileColor} at (${row},${col}).`
+      } else if (card.college) {
+        // 'college' mode — place as the college card itself
+        tileColor = card.color
+        tileCard = card
+        logMsg = `${activePlayer} plays ${card.name} (${card.college}) at (${row},${col}).`
+      } else {
+        tileColor = card.color
+        tileCard = { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
+        logMsg = `${activePlayer} plays ${card.name} at (${row},${col}).`
+      }
+      grid[row][col] = { color: tileColor, card: tileCard }
 
       const actionsRemaining = state.actionsRemaining - 1
 
@@ -100,7 +119,7 @@ export function gameReducer(state, action) {
         discard,
         actionsRemaining,
         phase: actionsRemaining <= 0 ? PHASES.CHECK_WIN : PHASES.ACT,
-        log: [...state.log, `${activePlayer} plays ${card.name} at (${row},${col}). [${actionsRemaining} actions left]`],
+        log: [...state.log, `${logMsg} [${actionsRemaining} actions left]`],
       }
     }
 
