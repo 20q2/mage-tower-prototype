@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useRef, useEffect, useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import Tile from './Tile'
 import '../styles/board.css'
 import { ROWS, COLS } from '../engine/constants'
@@ -9,45 +9,50 @@ export default function Board({ grid, mascots, validMoves, onTileClick, onDropCa
   const gridRef = useRef(null)
   const tileRefs = useRef({})
   const [mascotPositions, setMascotPositions] = useState({ p1: null, p2: null })
+  const [hasInitialized, setHasInitialized] = useState(false)
 
-  // Register tile DOM elements
-  function setTileRef(row, col, el) {
-    tileRefs.current[`${row},${col}`] = el
-  }
+  const setTileRef = useCallback((row, col, el) => {
+    if (el) tileRefs.current[`${row},${col}`] = el
+  }, [])
 
   // Calculate mascot pixel positions relative to grid container
-  useEffect(() => {
-    function update() {
-      const gridEl = gridRef.current
-      if (!gridEl) return
-      const gridRect = gridEl.getBoundingClientRect()
+  const updatePositions = useCallback(() => {
+    const gridEl = gridRef.current
+    if (!gridEl) return
 
-      const positions = {}
-      for (const player of ['p1', 'p2']) {
-        const { row, col } = mascots[player]
-        const tileEl = tileRefs.current[`${row},${col}`]
-        if (tileEl) {
-          const tileRect = tileEl.getBoundingClientRect()
-          positions[player] = {
-            x: tileRect.left - gridRect.left + tileRect.width / 2,
-            y: tileRect.top - gridRect.top + tileRect.height / 2,
-          }
+    const gridRect = gridEl.getBoundingClientRect()
+    const positions = {}
+
+    for (const player of ['p1', 'p2']) {
+      const { row, col } = mascots[player]
+      const tileEl = tileRefs.current[`${row},${col}`]
+      if (tileEl) {
+        const tileRect = tileEl.getBoundingClientRect()
+        positions[player] = {
+          x: tileRect.left - gridRect.left + tileRect.width / 2,
+          y: tileRect.top - gridRect.top + tileRect.height / 2,
         }
       }
+    }
+
+    if (positions.p1 && positions.p2) {
       setMascotPositions(positions)
+      if (!hasInitialized) setHasInitialized(true)
     }
+  }, [mascots, hasInitialized])
 
-    update()
-
-    // Recalculate on resize
-    window.addEventListener('resize', update)
-    // Also recalculate after a brief delay (images loading can shift layout)
-    const t = setTimeout(update, 100)
+  useEffect(() => {
+    updatePositions()
+    // Recalculate after images may have loaded
+    const t1 = setTimeout(updatePositions, 50)
+    const t2 = setTimeout(updatePositions, 200)
+    window.addEventListener('resize', updatePositions)
     return () => {
-      window.removeEventListener('resize', update)
-      clearTimeout(t)
+      window.removeEventListener('resize', updatePositions)
+      clearTimeout(t1)
+      clearTimeout(t2)
     }
-  }, [mascots.p1.row, mascots.p1.col, mascots.p2.row, mascots.p2.col])
+  }, [updatePositions])
 
   const tiles = []
   for (let col = 0; col < COLS; col++) {
@@ -79,7 +84,7 @@ export default function Board({ grid, mascots, validMoves, onTileClick, onDropCa
       <div className="board-grid" ref={gridRef} style={{ position: 'relative' }}>
         {tiles}
 
-        {/* Mascots rendered as overlays — animate between positions */}
+        {/* Mascot overlays — animate smoothly between tile positions */}
         {['p1', 'p2'].map((player) => {
           const pos = mascotPositions[player]
           if (!pos) return null
@@ -87,19 +92,22 @@ export default function Board({ grid, mascots, validMoves, onTileClick, onDropCa
             <motion.div
               key={player}
               className={`mascot mascot--${player}`}
-              animate={{ x: pos.x, y: pos.y }}
-              transition={{
-                type: 'spring',
-                stiffness: 120,
-                damping: 18,
-                mass: 1.2,
+              // Use left/top for centering, animate x/y for movement
+              initial={false}
+              animate={{
+                left: pos.x,
+                top: pos.y,
               }}
+              transition={
+                hasInitialized
+                  ? { type: 'spring', stiffness: 120, damping: 18, mass: 1.2 }
+                  : { duration: 0 }
+              }
               style={{
                 position: 'absolute',
-                top: 0,
-                left: 0,
                 transform: 'translate(-50%, -50%)',
                 pointerEvents: 'none',
+                zIndex: 10,
               }}
             >
               {player === 'p1' ? 'P1' : 'P2'}

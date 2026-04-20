@@ -161,7 +161,6 @@ export function gameReducer(state, action) {
 
       // P1 moves P2's mascot (toward P2 goal = row 0)
       if (p1Move) {
-        const targetTile = state.grid[p1Move.row][p1Move.col]
         logEntries.push(`P1 pushes P2's mascot to (${p1Move.row},${p1Move.col}).`)
 
         const chain1 = resolveChain(

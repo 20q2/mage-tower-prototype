@@ -18,36 +18,40 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const [showPassScreen, setShowPassScreen] = useState(false)
   const [showLog, setShowLog] = useState(false)
   const logBottomRef = useRef(null)
+  // Guard refs to prevent double-dispatching from effects
+  const aiPlayingRef = useRef(false)
+  const aiMovingRef = useRef(false)
 
   const { grid, mascots, hands, phase, turnCount, winner, pendingMoves, pendingLateral, log } = state
 
   const isAI = mode === 'ai'
 
-  // Who is "active" right now?
   const activePlayer =
     phase === PHASES.P1_DRAW || phase === PHASES.P1_PLAY ? 'p1' :
     phase === PHASES.P2_DRAW || phase === PHASES.P2_PLAY ? 'p2' :
-    null // MOVE/RESOLVE/CHECK_WIN are shared
+    null
 
   const isAiTurn = isAI && activePlayer === 'p2'
   const isHumanPlayPhase = (phase === PHASES.P1_PLAY) || (phase === PHASES.P2_PLAY && !isAI)
   const isHumanMovePhase = phase === PHASES.MOVE && !winner
 
-  // In move phase, which player still needs to submit?
   const p1NeedsMove = phase === PHASES.MOVE && pendingMoves.p1 === null
   const p2NeedsMove = phase === PHASES.MOVE && pendingMoves.p2 === null
   const humanNeedsMove = isHumanMovePhase && p1NeedsMove
-  const aiNeedsMove = isAI && p2NeedsMove
 
-  // Valid moves for the human during move phase (P1 moves P2's mascot)
   const validMovesP1 = humanNeedsMove
     ? getValidMoves(grid, mascots.p2, 'p1')
     : []
 
-  // Hot-seat: P2 moves P1's mascot
   const validMovesP2 = !isAI && p2NeedsMove
     ? getValidMoves(grid, mascots.p1, 'p2')
     : []
+
+  // Reset AI guards when phase changes
+  useEffect(() => {
+    aiPlayingRef.current = false
+    aiMovingRef.current = false
+  }, [phase])
 
   // Scroll log
   useEffect(() => {
@@ -79,6 +83,9 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   // === AI: play phase ===
   useEffect(() => {
     if (!isAiTurn || phase !== PHASES.P2_PLAY || winner) return
+    if (aiPlayingRef.current) return
+    aiPlayingRef.current = true
+
     const t = setTimeout(() => {
       const aiState = { ...state, activePlayer: 'p2' }
       const play = chooseCardPlay(aiState)
@@ -89,14 +96,19 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
           dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, play.row, play.col), player: 'p2' } })
         }
       }
+      // Use a fresh timeout so the PLAY_CARD dispatch is processed first
       setTimeout(() => dispatch({ type: 'END_PLAY_PHASE', payload: { player: 'p2' } }), 300)
     }, 600)
     return () => clearTimeout(t)
   }, [isAiTurn, phase, winner])
 
-  // === AI: move phase — AI submits its move ===
+  // === AI: move phase ===
   useEffect(() => {
-    if (!aiNeedsMove || winner) return
+    if (!isAI || phase !== PHASES.MOVE || winner) return
+    if (pendingMoves.p2 !== null) return // Already submitted
+    if (aiMovingRef.current) return
+    aiMovingRef.current = true
+
     const t = setTimeout(() => {
       const aiState = { ...state, activePlayer: 'p2' }
       const move = chooseMove(aiState)
@@ -105,7 +117,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
       }
     }, 500)
     return () => clearTimeout(t)
-  }, [aiNeedsMove, winner])
+  }, [isAI, phase, winner, pendingMoves.p2])
 
   // === Auto-resolve when both moves are in ===
   useEffect(() => {
@@ -125,7 +137,6 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const handleTileClick = useCallback((row, col) => {
     if (winner) return
 
-    // Lateral resolution
     if (pendingLateral?.length > 0) {
       if (pendingLateral.some(o => o.row === row && o.col === col)) {
         dispatch({ type: 'RESOLVE_LATERAL', payload: { row, col, player: state.pendingLateralPlayer } })
@@ -133,7 +144,6 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
       return
     }
 
-    // Play phase: click-to-place
     if (isHumanPlayPhase && selectedCardIndex !== null) {
       const player = activePlayer
       const card = hands[player][selectedCardIndex]
@@ -145,13 +155,11 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
       return
     }
 
-    // Move phase: P1 clicks to move P2's mascot
     if (humanNeedsMove && validMovesP1.some(m => m.row === row && m.col === col)) {
       dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p1', row, col } })
       return
     }
 
-    // Hot-seat move phase: P2 clicks to move P1's mascot
     if (!isAI && p2NeedsMove && !p1NeedsMove && validMovesP2.some(m => m.row === row && m.col === col)) {
       dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p2', row, col } })
       return
@@ -168,7 +176,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
       dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col), player } })
     }
     setSelectedCardIndex(null)
-  }, [isHumanPlayPhase, winner, hands, activePlayer, state])
+  }, [isHumanPlayPhase, winner, hands, activePlayer])
 
   const handleCardSelect = useCallback((index) => {
     if (!isHumanPlayPhase || winner) return
@@ -177,7 +185,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
 
   const canDropCards = isHumanPlayPhase && !winner
 
-  // === Phase display ===
+  // Phase display
   const phaseLabel = {
     [PHASES.P1_DRAW]: 'P1 Drawing...',
     [PHASES.P1_PLAY]: 'P1 Place Terrain',
@@ -198,13 +206,9 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     [PHASES.CHECK_WIN]: '#f59e0b',
   }[phase] || '#888'
 
-  // Which valid moves to highlight?
   const highlightedMoves = humanNeedsMove
     ? validMovesP1
     : (!isAI && p2NeedsMove && !p1NeedsMove ? validMovesP2 : [])
-
-  // Which hand to show?
-  const visibleHand = isHumanPlayPhase ? hands[activePlayer] : (humanNeedsMove ? hands.p1 : [])
 
   return (
     <div className="game-screen">
@@ -351,7 +355,6 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
           />
         )}
 
-        {/* Hot-seat P2 move: no hand shown, just controls */}
         {!isAI && p2NeedsMove && !p1NeedsMove && (
           <div style={{ minHeight: '40px' }} />
         )}
