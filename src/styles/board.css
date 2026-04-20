@@ -88,6 +88,24 @@
 .tile--colorless {
   border-color: rgba(156, 163, 175, 0.3);
 }
+.tile--empty {
+  border-color: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+}
+.tile--empty .tile__art--fallback {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Middle row (col 1 in game coords = visual row 2) is darker to represent the center lane */
+.board-grid .tile:nth-child(3n+2) {
+  /* This won't work since grid is col-major... use a class instead */
+}
+.tile--middle-lane {
+  filter: brightness(0.75);
+}
+.tile--middle-lane:hover {
+  filter: brightness(0.85);
+}
 .tile--gold {
   border-color: var(--mtg-gold);
   box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 14px rgba(212, 168, 67, 0.3);

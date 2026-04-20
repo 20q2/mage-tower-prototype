@@ -15,33 +15,26 @@ function addId(card, index) {
   return { ...card, id: `${card.name}-${index}-${Math.random().toString(36).slice(2, 8)}` }
 }
 
+// Map mono-color cards to their basic land for tile display
+export const COLOR_TO_LAND = {
+  white: 'Plains',
+  blue: 'Island',
+  black: 'Swamp',
+  red: 'Mountain',
+  green: 'Forest',
+  colorless: 'Wastes',
+}
+
 export function createInitialState(p1DeckKey, p2DeckKey) {
   const p1Cards = shuffleArray(DECKS[p1DeckKey].cards.map(addId))
   const p2Cards = shuffleArray(DECKS[p2DeckKey].cards.map(addId))
 
-  // 9 cards from each player form the 3x6 grid (18 tiles total)
-  const p1BoardCards = p1Cards.splice(0, 9)
-  const p2BoardCards = p2Cards.splice(0, 9)
+  // Grid starts EMPTY — no cards dealt to board
+  const grid = Array.from({ length: ROWS }, () =>
+    Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
+  )
 
-  // Build grid: rows 0-2 from p2's cards (their side), rows 3-5 from p1's cards
-  const grid = []
-  for (let row = 0; row < 3; row++) {
-    grid.push(
-      Array.from({ length: 3 }, (_, col) => {
-        const card = p2BoardCards[row * 3 + col]
-        return { color: card.color, card }
-      })
-    )
-  }
-  for (let row = 0; row < 3; row++) {
-    grid.push(
-      Array.from({ length: 3 }, (_, col) => {
-        const card = p1BoardCards[row * 3 + col]
-        return { color: card.color, card }
-      })
-    )
-  }
-
+  // Deal 3 cards to each hand from their full deck
   const p1Hand = p1Cards.splice(0, 3)
   const p2Hand = p2Cards.splice(0, 3)
 
@@ -98,9 +91,16 @@ export function gameReducer(state, action) {
 
       const grid = state.grid.map((r) => r.map((t) => ({ ...t })))
       const oldTileCard = grid[row][col].card
-      grid[row][col] = { color: card.color, card }
+      const discard = oldTileCard ? [...state.discard, oldTileCard] : [...state.discard]
 
-      const discard = [...state.discard, oldTileCard]
+      // College cards: show the actual card on the tile
+      // Mono-color cards: show a basic land to represent that color
+      const isCollege = !!card.college
+      const tileCard = isCollege
+        ? card
+        : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
+
+      grid[row][col] = { color: card.color, card: tileCard }
 
       const blueBonusDraws = { ...state.blueBonusDraws }
       if (card.color === 'blue') {

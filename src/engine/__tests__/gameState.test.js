@@ -2,10 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createInitialState, gameReducer } from '../gameState'
 
 describe('createInitialState', () => {
-  it('creates a 6x3 grid from two decks', () => {
+  it('creates a 6x3 empty grid', () => {
     const state = createInitialState('lorehold', 'witherbloom')
     expect(state.grid).toHaveLength(6)
     expect(state.grid[0]).toHaveLength(3)
+    // Grid starts empty
+    expect(state.grid[0][0].color).toBe('empty')
+    expect(state.grid[0][0].card).toBe(null)
   })
 
   it('places mascots at correct starting positions', () => {
@@ -51,7 +54,9 @@ describe('gameReducer', () => {
       type: 'PLAY_CARD',
       payload: { cardIndex: 0, row: 2, col: 1 },
     })
-    expect(next.grid[2][1].card).toEqual(cardToPlay)
+    // Card is placed on grid (may have displayName added for mono-color)
+    expect(next.grid[2][1].card.name).toEqual(cardToPlay.name)
+    expect(next.grid[2][1].color).toEqual(cardToPlay.color)
     expect(next.hands.p1).toHaveLength(handSize - 1)
   })
 
@@ -79,14 +84,35 @@ describe('gameReducer', () => {
     expect(next.phase).toBe('draw')
   })
 
-  it('PLAY_CARD adds replaced tile card to discard', () => {
+  it('PLAY_CARD on empty tile does not add null to discard', () => {
     let next = gameReducer(state, { type: 'DRAW_CARD' })
-    const originalTileCard = next.grid[2][1].card
+    // Grid starts empty
+    expect(next.grid[2][1].card).toBe(null)
     next = gameReducer(next, {
       type: 'PLAY_CARD',
       payload: { cardIndex: 0, row: 2, col: 1 },
     })
-    expect(next.discard).toContainEqual(originalTileCard)
+    // No null in discard
+    expect(next.discard.every(c => c !== null)).toBe(true)
+  })
+
+  it('PLAY_CARD on occupied tile adds old card to discard', () => {
+    let next = gameReducer(state, { type: 'DRAW_CARD' })
+    // Play first card to fill a tile
+    next = gameReducer(next, {
+      type: 'PLAY_CARD',
+      payload: { cardIndex: 0, row: 2, col: 1 },
+    })
+    const occupyingCard = next.grid[2][1].card
+    // Draw another card and play on same tile
+    next = gameReducer(next, { type: 'END_PLAY_PHASE' })
+    next = { ...next, phase: 'play' } // force back to play for test
+    next.hands.p1 = [{ name: 'Test', color: 'red', scryfallName: 'Mountain', id: 'test-1' }]
+    next = gameReducer(next, {
+      type: 'PLAY_CARD',
+      payload: { cardIndex: 0, row: 2, col: 1 },
+    })
+    expect(next.discard).toContainEqual(occupyingCard)
   })
 
   it('PLAY_CARD for blue card increments blue bonus draws', () => {

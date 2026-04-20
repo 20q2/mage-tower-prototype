@@ -26,6 +26,7 @@ export default function Board({ grid, mascots, validMoves, onTileClick }) {
           mascotHere={getMascotAt(row, col)}
           onTileClick={onTileClick}
           isValidMove={validMoveSet.has(`${row},${col}`)}
+          isMiddleLane={col === 1}
         />
       )
     }
