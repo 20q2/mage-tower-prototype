@@ -54,10 +54,11 @@ export function resolveTile(grid, pos, movingPlayer, silverquillImmunity, extras
         if (currentIdx !== -1) {
           const nextIdx = (currentIdx + 1) % portals.length
           const dest = portals[nextIdx]
-          return { newPos: { row: dest.row, col: dest.col }, chain: true, portal: true }
+          return { newPos: { row: dest.row, col: dest.col }, chain: true, portal: true, draw: true }
         }
       }
-      return noEffect
+      // No portal — still draw a card on entry
+      return { ...noEffect, draw: true }
     }
     case 'colorless':
     default:
@@ -69,18 +70,20 @@ export function resolveChain(grid, startPos, movingPlayer, silverquillImmunity, 
   const steps = [{ ...startPos }]
   let currentPos = { ...startPos }
   let depth = 0
+  let drawCount = 0
 
   while (depth < CHAIN_CAP) {
     const result = resolveTile(grid, currentPos, movingPlayer, silverquillImmunity, extras)
+    if (result.draw) drawCount++
     if (!result.chain) {
-      return { finalPos: currentPos, steps, lateralOptions: result.lateralOptions || null }
+      return { finalPos: currentPos, steps, lateralOptions: result.lateralOptions || null, drawCount }
     }
     currentPos = result.newPos
     steps.push({ ...currentPos })
     depth++
   }
 
-  return { finalPos: currentPos, steps, lateralOptions: null }
+  return { finalPos: currentPos, steps, lateralOptions: null, drawCount }
 }
 
 export function getValidMoves(grid, mascotPos, activePlayer) {

@@ -73,7 +73,6 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
     portalLinks: [],
     silverquillImmunity: null,
     prismariBoostRow: null,
-    blueBonusDraws: { p1: 0, p2: 0 },
     pendingLateral: null,
     log: ['Game started!'],
   }
@@ -86,16 +85,13 @@ export function gameReducer(state, action) {
     case 'DRAW_CARD': {
       const deck = [...state.decks[activePlayer]]
       const hand = [...state.hands[activePlayer]]
-      const bonusDraws = state.blueBonusDraws[activePlayer]
-      const totalDraws = 1 + bonusDraws
-      const drawn = deck.splice(0, Math.min(totalDraws, deck.length))
+      const drawn = deck.splice(0, Math.min(1, deck.length))
       hand.push(...drawn)
 
       return {
         ...state,
         decks: { ...state.decks, [activePlayer]: deck },
         hands: { ...state.hands, [activePlayer]: hand },
-        blueBonusDraws: { ...state.blueBonusDraws, [activePlayer]: 0 },
         phase: PHASES.ACT,
         actionsRemaining: ACTIONS_PER_TURN,
         log: [...state.log, `${activePlayer} draws ${drawn.length} card(s). ${ACTIONS_PER_TURN} actions available.`],
@@ -118,11 +114,6 @@ export function gameReducer(state, action) {
         : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
       grid[row][col] = { color: card.color, card: tileCard }
 
-      const blueBonusDraws = { ...state.blueBonusDraws }
-      if (card.color === 'blue') {
-        blueBonusDraws[activePlayer] = (blueBonusDraws[activePlayer] || 0) + 1
-      }
-
       const actionsRemaining = state.actionsRemaining - 1
 
       return {
@@ -130,7 +121,6 @@ export function gameReducer(state, action) {
         grid,
         hands: { ...state.hands, [activePlayer]: hand },
         discard,
-        blueBonusDraws,
         actionsRemaining,
         phase: actionsRemaining <= 0 ? PHASES.CHECK_WIN : PHASES.ACT,
         log: [...state.log, `${activePlayer} plays ${card.name} at (${row},${col}). [${actionsRemaining} actions left]`],
@@ -162,6 +152,21 @@ export function gameReducer(state, action) {
         logEntries.push(`  → Lands at (${chain.finalPos.row},${chain.finalPos.col})`)
       }
 
+      // Blue tiles: draw cards immediately on entry
+      let hands = state.hands
+      let decks = state.decks
+      if (chain.drawCount > 0) {
+        const deck = [...decks[activePlayer]]
+        const hand = [...hands[activePlayer]]
+        const drawn = deck.splice(0, Math.min(chain.drawCount, deck.length))
+        hand.push(...drawn)
+        hands = { ...hands, [activePlayer]: hand }
+        decks = { ...decks, [activePlayer]: deck }
+        if (drawn.length > 0) {
+          logEntries.push(`  Blue tile — drew ${drawn.length} card(s)!`)
+        }
+      }
+
       const winner = checkWinCondition(newMascots, activePlayer)
       const actionsRemaining = state.actionsRemaining - 1
 
@@ -171,6 +176,7 @@ export function gameReducer(state, action) {
         return {
           ...state,
           mascots: newMascots,
+          hands, decks,
           actionsRemaining,
           pendingLateral: chain.lateralOptions,
           winner,
@@ -181,6 +187,7 @@ export function gameReducer(state, action) {
       return {
         ...state,
         mascots: newMascots,
+        hands, decks,
         actionsRemaining,
         phase: (actionsRemaining <= 0 || winner) ? PHASES.CHECK_WIN : PHASES.ACT,
         winner,

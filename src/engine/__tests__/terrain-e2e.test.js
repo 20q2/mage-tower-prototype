@@ -34,7 +34,6 @@ function moveState(overrides = {}) {
     portalLinks: [],
     silverquillImmunity: null,
     prismariBoostRow: null,
-    blueBonusDraws: { p1: 0, p2: 0 },
     pendingLateral: null,
     log: [],
     ...overrides,

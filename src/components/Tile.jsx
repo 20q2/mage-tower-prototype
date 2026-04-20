@@ -8,7 +8,7 @@ const EFFECT_LABELS = {
   red: '+1 Forward',
   black: '-1 Back',
   green: 'WALL',
-  blue: 'Draw +1',
+  blue: 'Draw 1',
   colorless: '',
   empty: '',
 }

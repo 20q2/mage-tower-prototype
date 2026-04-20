@@ -114,10 +114,14 @@ describe('gameReducer — 3-action system', () => {
     expect(next.winner).toBe('p1')
   })
 
-  it('blue card gives bonus draw', () => {
-    let next = gameReducer(state, { type: 'DRAW_CARD' })
-    next.hands.p1[0] = { name: 'Island', color: 'blue', scryfallName: 'Island', id: 'b1' }
-    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 3, col: 1 } })
-    expect(next.blueBonusDraws.p1).toBe(1)
+  it('stepping onto blue tile draws a card immediately', () => {
+    let next = { ...state, phase: 'act', actionsRemaining: 3, activePlayer: 'p1' }
+    // Place a blue tile ahead
+    next.grid[4][1] = { color: 'blue', card: { name: 'Island', color: 'blue', scryfallName: 'Island', displayName: 'Island' } }
+    const handBefore = next.hands.p1.length
+    const deckBefore = next.decks.p1.length
+    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
+    expect(next.hands.p1.length).toBe(handBefore + 1)
+    expect(next.decks.p1.length).toBe(deckBefore - 1)
   })
 })
