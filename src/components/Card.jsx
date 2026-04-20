@@ -11,10 +11,15 @@ const COLOR_PIPS = {
   colorless: '#9ca3af',
 }
 
-export default function Card({ card, index, isSelected, onSelect }) {
+export default function Card({ card, index, isSelected, onSelect, draggable }) {
   const [imgFailed, setImgFailed] = useState(false)
   const imageUrl = getScryfallImageUrl(card.scryfallName)
   const colorClass = card.college ? 'gold' : card.color
+
+  function handleDragStart(e) {
+    e.dataTransfer.setData('text/plain', String(index))
+    e.dataTransfer.effectAllowed = 'move'
+  }
 
   return (
     <motion.div
@@ -22,10 +27,13 @@ export default function Card({ card, index, isSelected, onSelect }) {
         'card',
         `card--${colorClass}`,
         isSelected && 'card--selected',
+        draggable && 'card--draggable',
       ]
         .filter(Boolean)
         .join(' ')}
       onClick={() => onSelect?.(index)}
+      draggable={draggable}
+      onDragStart={handleDragStart}
       whileHover={{ y: -16, scale: 1.08 }}
       whileTap={{ scale: 0.95 }}
       initial={{ opacity: 0, y: 30 }}
@@ -51,7 +59,6 @@ export default function Card({ card, index, isSelected, onSelect }) {
         <div className="card__art card__art--fallback" />
       )}
 
-      {/* Color pip */}
       {!card.college && (
         <div
           className="card__color-pip"

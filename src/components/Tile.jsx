@@ -14,15 +14,15 @@ const EFFECT_LABELS = {
   empty: '',
 }
 
-export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidMove, isMiddleLane }) {
+export default function Tile({ tile, row, col, mascotHere, onTileClick, onDrop, isValidMove, isMiddleLane, canDrop }) {
   const [imgFailed, setImgFailed] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
 
   const isEmpty = tile.color === 'empty' || !tile.card
   const isCollege = tile.card?.college
   const isGoalP1 = row === P1_GOAL_ROW
   const isGoalP2 = row === P2_GOAL_ROW
 
-  // Art: college cards show their actual art, mono-color show the basic land
   const artName = isCollege
     ? tile.card.scryfallName
     : tile.card?.displayName || tile.card?.scryfallName || null
@@ -30,19 +30,38 @@ export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidM
 
   const colorClass = isEmpty ? 'empty' : (isCollege ? 'gold' : tile.color)
 
-  // Label: college name for college cards, effect for mono-color
   const effectLabel = isEmpty
     ? ''
     : isCollege
       ? tile.card.college.charAt(0).toUpperCase() + tile.card.college.slice(1)
       : EFFECT_LABELS[tile.color]
 
-  // Display name: college cards show card name, mono-color show land name
   const displayName = isEmpty
     ? ''
     : isCollege
       ? tile.card.name
       : tile.card?.displayName || ''
+
+  function handleDragOver(e) {
+    if (!canDrop) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOver(true)
+  }
+
+  function handleDragLeave() {
+    setDragOver(false)
+  }
+
+  function handleDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    if (!canDrop) return
+    const cardIndex = parseInt(e.dataTransfer.getData('text/plain'), 10)
+    if (!isNaN(cardIndex)) {
+      onDrop?.(cardIndex, row, col)
+    }
+  }
 
   return (
     <motion.div
@@ -54,11 +73,15 @@ export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidM
         isValidMove && 'tile--valid-move',
         mascotHere && 'tile--has-mascot',
         isMiddleLane && 'tile--middle-lane',
+        dragOver && 'tile--drag-over',
       ]
         .filter(Boolean)
         .join(' ')}
       onClick={() => onTileClick?.(row, col)}
-      whileHover={isEmpty ? {} : { y: -3, scale: 1.03 }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      whileHover={isEmpty && !dragOver ? {} : { y: -3, scale: 1.03 }}
       whileTap={isEmpty ? {} : { scale: 0.97 }}
     >
       {imageUrl && !imgFailed ? (
@@ -77,13 +100,8 @@ export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidM
         <div className="tile__art tile__art--fallback" />
       )}
 
-      {/* Card/land name at top */}
       {displayName && <div className="tile__card-name">{displayName}</div>}
-
-      {/* Effect label at bottom */}
       {effectLabel && <div className="tile__effect-label">{effectLabel}</div>}
-
-      {/* Mascot token */}
       {mascotHere && <Mascot player={mascotHere} />}
     </motion.div>
   )

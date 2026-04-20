@@ -132,6 +132,19 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     setSelectedCardIndex(prev => prev === index ? null : index)
   }, [phase, isHumanTurn, winner])
 
+  // Drag & drop: card dropped on a tile
+  const handleDropCard = useCallback((cardIndex, row, col) => {
+    if (phase !== PHASES.PLAY || !isHumanTurn || winner) return
+    const card = hands[activePlayer][cardIndex]
+    dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col } })
+    if (card?.college) {
+      dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col, state) } })
+    }
+    setSelectedCardIndex(null)
+  }, [phase, isHumanTurn, winner, hands, activePlayer, state])
+
+  const canDropCards = phase === PHASES.PLAY && isHumanTurn && !winner
+
   // Phase display
   const phaseInfo = {
     [PHASES.DRAW]: { label: 'Drawing...', color: '#3b82f6' },
@@ -208,6 +221,8 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
           mascots={mascots}
           validMoves={[...validMoves, ...(pendingLateral && isHumanTurn ? pendingLateral : [])]}
           onTileClick={handleTileClick}
+          onDropCard={handleDropCard}
+          canDropCards={canDropCards}
         />
       </div>
 
@@ -228,12 +243,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
         <div className="controls-strip">
           {phase === PHASES.PLAY && isHumanTurn && (
             <>
-              {selectedCardIndex !== null && (
-                <span className="hint">Click a tile to place card</span>
-              )}
-              {selectedCardIndex === null && (
-                <span className="hint">Select a card or skip</span>
-              )}
+              <span className="hint">Drag a card onto the board, or click to select & place</span>
               <button className="btn btn--primary" onClick={() => {
                 setSelectedCardIndex(null)
                 dispatch({ type: 'END_PLAY_PHASE' })
@@ -281,6 +291,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
           cards={hands[activePlayer]}
           selectedIndex={phase === PHASES.PLAY && isHumanTurn ? selectedCardIndex : null}
           onSelect={handleCardSelect}
+          canDrag={canDropCards}
         />
       </div>
 

@@ -2,7 +2,7 @@ import Tile from './Tile'
 import '../styles/board.css'
 import { ROWS, COLS } from '../engine/constants'
 
-export default function Board({ grid, mascots, validMoves, onTileClick }) {
+export default function Board({ grid, mascots, validMoves, onTileClick, onDropCard, canDropCards }) {
   const validMoveSet = new Set((validMoves || []).map((m) => `${m.row},${m.col}`))
 
   function getMascotAt(row, col) {
@@ -11,9 +11,6 @@ export default function Board({ grid, mascots, validMoves, onTileClick }) {
     return null
   }
 
-  // Landscape layout: original rows (0-5) become visual columns (left to right)
-  // Original cols (0-2) become visual rows (top to bottom)
-  // CSS grid is 6 cols x 3 rows. Items placed in row-major order.
   const tiles = []
   for (let col = 0; col < COLS; col++) {
     for (let row = 0; row < ROWS; row++) {
@@ -25,6 +22,8 @@ export default function Board({ grid, mascots, validMoves, onTileClick }) {
           col={col}
           mascotHere={getMascotAt(row, col)}
           onTileClick={onTileClick}
+          onDrop={onDropCard}
+          canDrop={canDropCards}
           isValidMove={validMoveSet.has(`${row},${col}`)}
           isMiddleLane={col === 1}
         />
