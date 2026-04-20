@@ -85,6 +85,7 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
     decks: { p1: p1Cards, p2: p2Cards },
     discard: [],
     phase: PHASES.P1_DRAW,
+    firstPlayer: 'p1', // Alternates each round
     turnCount: 1,
     winner: null,
     // Simultaneous move collection
@@ -161,11 +162,15 @@ export function gameReducer(state, action) {
     // === END PLAY: finish placing terrain ===
     case 'END_PLAY_PHASE': {
       const { player } = action.payload
-      if (player === 'p1') {
-        // P1 done → P2 draws
-        return { ...state, phase: PHASES.P2_DRAW }
+      const first = state.firstPlayer || 'p1'
+      const second = first === 'p1' ? 'p2' : 'p1'
+
+      if (player === first) {
+        // First player done → second player draws
+        const nextPhase = second === 'p1' ? PHASES.P1_DRAW : PHASES.P2_DRAW
+        return { ...state, phase: nextPhase }
       } else {
-        // P2 done → simultaneous move phase
+        // Second player done → simultaneous move phase
         return {
           ...state,
           phase: PHASES.MOVE,
@@ -302,18 +307,21 @@ export function gameReducer(state, action) {
       return { ...state, pendingLateral: null, pendingLateralPlayer: null }
     }
 
-    // === END_TURN: start next round ===
+    // === END_TURN: start next round, alternate who goes first ===
     case 'END_TURN': {
       const silverquillImmunity = null // Clears each round
+      const nextFirst = state.firstPlayer === 'p1' ? 'p2' : 'p1'
+      const nextPhase = nextFirst === 'p1' ? PHASES.P1_DRAW : PHASES.P2_DRAW
 
       return {
         ...state,
-        phase: PHASES.P1_DRAW,
+        phase: nextPhase,
+        firstPlayer: nextFirst,
         turnCount: state.turnCount + 1,
         silverquillImmunity,
         pendingLateral: null,
         pendingLateralPlayer: null,
-        log: [...state.log, `--- Turn ${state.turnCount + 1} ---`],
+        log: [...state.log, `--- Turn ${state.turnCount + 1} (${nextFirst} goes first) ---`],
       }
     }
 

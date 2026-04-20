@@ -58,20 +58,23 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     if (showLog) logBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [log.length, showLog])
 
-  // Hot-seat: pass screen between P1 play → P2 play
+  // Hot-seat: pass screen when switching to the second player's draw
   useEffect(() => {
-    if (mode === 'hotseat' && phase === PHASES.P2_DRAW) {
+    if (mode !== 'hotseat' || turnCount <= 0) return
+    const first = state.firstPlayer || 'p1'
+    const secondDraw = first === 'p1' ? PHASES.P2_DRAW : PHASES.P1_DRAW
+    if (phase === secondDraw) {
       setShowPassScreen(true)
     }
-  }, [phase, mode])
+  }, [phase, mode, state.firstPlayer, turnCount])
 
-  // === Auto-advance draws ===
+  // === Auto-advance draws (wait for pass screen if showing) ===
   useEffect(() => {
-    if (phase === PHASES.P1_DRAW && !winner) {
+    if (phase === PHASES.P1_DRAW && !winner && !showPassScreen) {
       const t = setTimeout(() => dispatch({ type: 'DRAW_CARD', payload: { player: 'p1' } }), 400)
       return () => clearTimeout(t)
     }
-  }, [phase, winner])
+  }, [phase, winner, showPassScreen])
 
   useEffect(() => {
     if (phase === PHASES.P2_DRAW && !winner && !showPassScreen) {

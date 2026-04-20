@@ -70,18 +70,34 @@ describe('gameReducer', () => {
     expect(next.hands.p1).toHaveLength(handSize - 1)
   })
 
-  it('END_PLAY_PHASE p1 → p2_draw', () => {
-    const next = gameReducer(
-      { ...state, phase: 'p1_play' },
+  it('END_PLAY_PHASE: first player done → second player draws', () => {
+    // When p1 is first: p1 ends → p2_draw
+    let next = gameReducer(
+      { ...state, phase: 'p1_play', firstPlayer: 'p1' },
       { type: 'END_PLAY_PHASE', payload: { player: 'p1' } }
     )
     expect(next.phase).toBe('p2_draw')
+
+    // When p2 is first: p2 ends → p1_draw
+    next = gameReducer(
+      { ...state, phase: 'p2_play', firstPlayer: 'p2' },
+      { type: 'END_PLAY_PHASE', payload: { player: 'p2' } }
+    )
+    expect(next.phase).toBe('p1_draw')
   })
 
-  it('END_PLAY_PHASE p2 → move', () => {
-    const next = gameReducer(
-      { ...state, phase: 'p2_play' },
+  it('END_PLAY_PHASE: second player done → move phase', () => {
+    // When p1 is first, p2 is second: p2 ends → move
+    let next = gameReducer(
+      { ...state, phase: 'p2_play', firstPlayer: 'p1' },
       { type: 'END_PLAY_PHASE', payload: { player: 'p2' } }
+    )
+    expect(next.phase).toBe('move')
+
+    // When p2 is first, p1 is second: p1 ends → move
+    next = gameReducer(
+      { ...state, phase: 'p1_play', firstPlayer: 'p2' },
+      { type: 'END_PLAY_PHASE', payload: { player: 'p1' } }
     )
     expect(next.phase).toBe('move')
   })
@@ -109,11 +125,20 @@ describe('gameReducer', () => {
     expect(next.mascots).toBeDefined()
   })
 
-  it('END_TURN advances to next round', () => {
-    let next = { ...state, phase: 'checkWin', turnCount: 1 }
+  it('END_TURN advances to next round and alternates first player', () => {
+    // firstPlayer starts as 'p1', so next round p2 goes first
+    let next = { ...state, phase: 'checkWin', turnCount: 1, firstPlayer: 'p1' }
+    next = gameReducer(next, { type: 'END_TURN' })
+    expect(next.phase).toBe('p2_draw')
+    expect(next.firstPlayer).toBe('p2')
+    expect(next.turnCount).toBe(2)
+
+    // Next round, p1 goes first again
+    next = { ...next, phase: 'checkWin' }
     next = gameReducer(next, { type: 'END_TURN' })
     expect(next.phase).toBe('p1_draw')
-    expect(next.turnCount).toBe(2)
+    expect(next.firstPlayer).toBe('p1')
+    expect(next.turnCount).toBe(3)
   })
 
   it('PLAY_CARD on empty tile does not add null to discard', () => {
