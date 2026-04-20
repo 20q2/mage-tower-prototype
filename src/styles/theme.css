@@ -1,0 +1,52 @@
+/* Slay the Spire-inspired dark warm theme */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-dark: #1a1210;
+  --bg-medium: #2a1f1a;
+  --bg-light: #3d2e24;
+  --bg-card: #4a3728;
+  --text-primary: #f0e6d6;
+  --text-secondary: #b8a898;
+  --text-muted: #7a6a5a;
+  --accent-gold: #d4a843;
+  --accent-glow: #f5c542;
+
+  /* MTG colors */
+  --mtg-white: #f5f0e0;
+  --mtg-blue: #3b82f6;
+  --mtg-black: #1a1a2e;
+  --mtg-red: #ef4444;
+  --mtg-green: #22c55e;
+  --mtg-gold: #d4a843;
+  --mtg-colorless: #9ca3af;
+
+  /* Layout */
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+h1, h2, h3 {
+  font-family: 'Cinzel', serif;
+}
+
+button {
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
