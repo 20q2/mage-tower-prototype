@@ -1,6 +1,6 @@
-import { PHASES, ROWS, COLS } from './constants'
+import { PHASES, ROWS, COLS, MOVE_STEPS } from './constants'
 import { DECKS } from './decks'
-import { resolveChain, checkWinCondition } from './rules'
+import { resolveChain, checkWinCondition, getValidMoves } from './rules'
 
 function shuffleArray(arr) {
   const shuffled = [...arr]
@@ -15,7 +15,6 @@ function addId(card, index) {
   return { ...card, id: `${card.name}-${index}-${Math.random().toString(36).slice(2, 8)}` }
 }
 
-// Map mono-color cards to their basic land for tile display
 export const COLOR_TO_LAND = {
   white: 'Plains',
   blue: 'Island',
@@ -29,8 +28,6 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
   const p1Cards = shuffleArray(DECKS[p1DeckKey].cards.map(addId))
   const p2Cards = shuffleArray(DECKS[p2DeckKey].cards.map(addId))
 
-  // Pre-seed the board: 5 cards from each player (10 total out of 18 tiles)
-  // P1 seeds their half (rows 3-5), P2 seeds their half (rows 0-2)
   const SEED_COUNT = 5
   const p1SeedCards = p1Cards.splice(0, SEED_COUNT)
   const p2SeedCards = p2Cards.splice(0, SEED_COUNT)
@@ -39,98 +36,86 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
     Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
   )
 
-  // Place P2's seed cards in rows 0-2 (their side) at random positions
+  // P2 seeds rows 0-2
   const p2Positions = []
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < COLS; c++) {
-      p2Positions.push({ row: r, col: c })
-    }
-  }
+  for (let r = 0; r < 3; r++) for (let c = 0; c < COLS; c++) p2Positions.push({ row: r, col: c })
   shuffleArray(p2Positions)
   for (let i = 0; i < SEED_COUNT && i < p2Positions.length; i++) {
     const { row, col } = p2Positions[i]
     const card = p2SeedCards[i]
-    const isCollege = !!card.college
-    const tileCard = isCollege ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
+    const tileCard = card.college ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
     grid[row][col] = { color: card.color, card: tileCard }
   }
 
-  // Place P1's seed cards in rows 3-5 (their side) at random positions
+  // P1 seeds rows 3-5
   const p1Positions = []
-  for (let r = 3; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      p1Positions.push({ row: r, col: c })
-    }
-  }
+  for (let r = 3; r < ROWS; r++) for (let c = 0; c < COLS; c++) p1Positions.push({ row: r, col: c })
   shuffleArray(p1Positions)
   for (let i = 0; i < SEED_COUNT && i < p1Positions.length; i++) {
     const { row, col } = p1Positions[i]
     const card = p1SeedCards[i]
-    const isCollege = !!card.college
-    const tileCard = isCollege ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
+    const tileCard = card.college ? card : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
     grid[row][col] = { color: card.color, card: tileCard }
   }
 
-  // Deal 5 cards to each hand (bigger hand = more options per turn)
   const p1Hand = p1Cards.splice(0, 5)
   const p2Hand = p2Cards.splice(0, 5)
 
   return {
     grid,
     mascots: {
-      p1: { row: 0, col: 1 },
-      p2: { row: 5, col: 1 },
+      p1: { row: 5, col: 1 },  // P1 starts at THEIR goal row (bottom), races to row 0
+      p2: { row: 0, col: 1 },  // P2 starts at THEIR goal row (top), races to row 5
     },
     hands: { p1: p1Hand, p2: p2Hand },
     decks: { p1: p1Cards, p2: p2Cards },
     discard: [],
-    phase: PHASES.P1_DRAW,
-    firstPlayer: 'p1', // Alternates each round
+    phase: PHASES.DRAW,
+    activePlayer: 'p1',
+    firstPlayer: 'p1',
     turnCount: 1,
     winner: null,
-    // Simultaneous move collection
-    pendingMoves: { p1: null, p2: null },
+    // Movement: 2 steps per turn, track remaining
+    movesRemaining: 0,
+    // Card play: 1 card per turn, track if played
+    hasPlayedCard: false,
     // College state
     portalLinks: [],
     silverquillImmunity: null,
     prismariBoostRow: null,
     blueBonusDraws: { p1: 0, p2: 0 },
-    // Lateral choice after resolve
+    // Lateral
     pendingLateral: null,
-    pendingLateralPlayer: null,
     log: ['Game started!'],
   }
 }
 
 export function gameReducer(state, action) {
+  const { activePlayer } = state
+
   switch (action.type) {
-    // === DRAW: specified player draws ===
     case 'DRAW_CARD': {
-      const player = action.payload?.player || 'p1'
-      const deck = [...state.decks[player]]
-      const hand = [...state.hands[player]]
-      const bonusDraws = state.blueBonusDraws[player]
+      const deck = [...state.decks[activePlayer]]
+      const hand = [...state.hands[activePlayer]]
+      const bonusDraws = state.blueBonusDraws[activePlayer]
       const totalDraws = 1 + bonusDraws
       const drawn = deck.splice(0, Math.min(totalDraws, deck.length))
       hand.push(...drawn)
 
-      // After P1 draws → P1 plays. After P2 draws → P2 plays.
-      const nextPhase = player === 'p1' ? PHASES.P1_PLAY : PHASES.P2_PLAY
-
       return {
         ...state,
-        decks: { ...state.decks, [player]: deck },
-        hands: { ...state.hands, [player]: hand },
-        blueBonusDraws: { ...state.blueBonusDraws, [player]: 0 },
-        phase: nextPhase,
-        log: [...state.log, `${player} draws ${drawn.length} card(s).`],
+        decks: { ...state.decks, [activePlayer]: deck },
+        hands: { ...state.hands, [activePlayer]: hand },
+        blueBonusDraws: { ...state.blueBonusDraws, [activePlayer]: 0 },
+        phase: PHASES.PLAY,
+        hasPlayedCard: false,
+        log: [...state.log, `${activePlayer} draws ${drawn.length} card(s).`],
       }
     }
 
-    // === PLAY: place a card on the grid ===
     case 'PLAY_CARD': {
-      const { cardIndex, row, col, player } = action.payload
-      const hand = [...state.hands[player]]
+      const { cardIndex, row, col } = action.payload
+      const hand = [...state.hands[activePlayer]]
       const card = hand[cardIndex]
       hand.splice(cardIndex, 1)
 
@@ -138,196 +123,174 @@ export function gameReducer(state, action) {
       const oldTileCard = grid[row][col].card
       const discard = oldTileCard ? [...state.discard, oldTileCard] : [...state.discard]
 
-      const isCollege = !!card.college
-      const tileCard = isCollege
+      const tileCard = card.college
         ? card
         : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
       grid[row][col] = { color: card.color, card: tileCard }
 
       const blueBonusDraws = { ...state.blueBonusDraws }
       if (card.color === 'blue') {
-        blueBonusDraws[player] = (blueBonusDraws[player] || 0) + 1
+        blueBonusDraws[activePlayer] = (blueBonusDraws[activePlayer] || 0) + 1
       }
 
       return {
         ...state,
         grid,
-        hands: { ...state.hands, [player]: hand },
+        hands: { ...state.hands, [activePlayer]: hand },
         discard,
         blueBonusDraws,
-        log: [...state.log, `${player} plays ${card.name} at (${row},${col}).`],
+        hasPlayedCard: true,
+        log: [...state.log, `${activePlayer} plays ${card.name} at (${row},${col}).`],
       }
     }
 
-    // === END PLAY: finish placing terrain ===
+    // Advance to move phase (auto or manual after playing 1 card / skipping)
     case 'END_PLAY_PHASE': {
-      const { player } = action.payload
-      const first = state.firstPlayer || 'p1'
-      const second = first === 'p1' ? 'p2' : 'p1'
-
-      if (player === first) {
-        // First player done → second player draws
-        const nextPhase = second === 'p1' ? PHASES.P1_DRAW : PHASES.P2_DRAW
-        return { ...state, phase: nextPhase }
-      } else {
-        // Second player done → simultaneous move phase
-        return {
-          ...state,
-          phase: PHASES.MOVE,
-          pendingMoves: { p1: null, p2: null },
-          log: [...state.log, '--- Both players choose movement ---'],
-        }
-      }
-    }
-
-    // === SUBMIT_MOVE: one player locks in their move choice ===
-    case 'SUBMIT_MOVE': {
-      const { player, row, col } = action.payload
-      const pendingMoves = { ...state.pendingMoves, [player]: { row, col } }
-
-      // Check if both moves are submitted
-      const bothReady = pendingMoves.p1 !== null && pendingMoves.p2 !== null
-      if (bothReady) {
-        return { ...state, pendingMoves, phase: PHASES.RESOLVE }
-      }
       return {
         ...state,
-        pendingMoves,
-        log: [...state.log, `${player} has chosen their move.`],
+        phase: PHASES.MOVE,
+        movesRemaining: MOVE_STEPS,
+        log: [...state.log, `${activePlayer} moves! (${MOVE_STEPS} steps)`],
       }
     }
 
-    // === RESOLVE: execute both moves simultaneously ===
-    case 'RESOLVE_MOVES': {
-      const { p1: p1Move, p2: p2Move } = state.pendingMoves
-      const newMascots = { ...state.mascots }
+    // Move YOUR OWN mascot 1 step (called up to MOVE_STEPS times)
+    case 'MOVE_MASCOT': {
+      const { row, col } = action.payload
+      const newMascots = { ...state.mascots, [activePlayer]: { row, col } }
+      const movesRemaining = state.movesRemaining - 1
+
+      // Resolve chain at new position
+      const chain = resolveChain(
+        state.grid, { row, col }, activePlayer, state.silverquillImmunity,
+        { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
+      )
+      newMascots[activePlayer] = chain.finalPos
+
       const logEntries = [...state.log]
-      let pendingLateral = null
-      let pendingLateralPlayer = null
+      logEntries.push(`${activePlayer} moves to (${row},${col}).`)
 
-      // P1 moves P2's mascot (toward P2 goal = row 0)
-      if (p1Move) {
-        logEntries.push(`P1 pushes P2's mascot to (${p1Move.row},${p1Move.col}).`)
-
-        const chain1 = resolveChain(
-          state.grid, p1Move, 'p1', state.silverquillImmunity,
-          { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
-        )
-        newMascots.p2 = chain1.finalPos
-
-        if (chain1.steps.length > 1) {
-          for (let i = 0; i < chain1.steps.length - 1; i++) {
-            const step = chain1.steps[i]
-            const tile = state.grid[step.row]?.[step.col]
-            if (tile && tile.color !== 'empty' && tile.color !== 'colorless') {
-              logEntries.push(`  ${tileEffectName(tile.color)} at (${step.row},${step.col})!`)
-            }
+      if (chain.steps.length > 1) {
+        for (let i = 0; i < chain.steps.length - 1; i++) {
+          const step = chain.steps[i]
+          const tile = state.grid[step.row]?.[step.col]
+          if (tile && tile.color !== 'empty' && tile.color !== 'colorless') {
+            logEntries.push(`  ${tileEffectName(tile.color)}!`)
           }
-          logEntries.push(`  → P2's mascot lands at (${chain1.finalPos.row},${chain1.finalPos.col})`)
         }
+        logEntries.push(`  → Lands at (${chain.finalPos.row},${chain.finalPos.col})`)
+      }
 
-        if (chain1.lateralOptions?.length > 0) {
-          logEntries.push(`  White tile — P1 may slide P2's mascot sideways!`)
-          pendingLateral = chain1.lateralOptions
-          pendingLateralPlayer = 'p1'
+      const winner = checkWinCondition(newMascots, activePlayer)
+
+      // If chain ended on white tile, offer lateral before continuing
+      if (chain.lateralOptions?.length > 0 && !winner) {
+        return {
+          ...state,
+          mascots: newMascots,
+          movesRemaining,
+          pendingLateral: chain.lateralOptions,
+          winner,
+          log: logEntries,
         }
       }
 
-      // P2 moves P1's mascot (toward P1 goal = row 5)
-      if (p2Move) {
-        logEntries.push(`P2 pushes P1's mascot to (${p2Move.row},${p2Move.col}).`)
-
-        const chain2 = resolveChain(
-          state.grid, p2Move, 'p2', state.silverquillImmunity,
-          { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
-        )
-        newMascots.p1 = chain2.finalPos
-
-        if (chain2.steps.length > 1) {
-          for (let i = 0; i < chain2.steps.length - 1; i++) {
-            const step = chain2.steps[i]
-            const tile = state.grid[step.row]?.[step.col]
-            if (tile && tile.color !== 'empty' && tile.color !== 'colorless') {
-              logEntries.push(`  ${tileEffectName(tile.color)} at (${step.row},${step.col})!`)
-            }
-          }
-          logEntries.push(`  → P1's mascot lands at (${chain2.finalPos.row},${chain2.finalPos.col})`)
-        }
-
-        // Only set lateral if P1 didn't already claim it (P1 lateral resolves first)
-        if (chain2.lateralOptions?.length > 0 && !pendingLateral) {
-          logEntries.push(`  White tile — P2 may slide P1's mascot sideways!`)
-          pendingLateral = chain2.lateralOptions
-          pendingLateralPlayer = 'p2'
-        } else if (chain2.lateralOptions?.length > 0 && pendingLateral) {
-          // Both have laterals — queue P2's for after P1's resolves
-          // For now, P2's lateral is noted but P1 goes first
-          logEntries.push(`  White tile — P2 lateral queued (P1 resolves first).`)
+      // If no more moves or winner, go to check win
+      if (movesRemaining <= 0 || winner) {
+        return {
+          ...state,
+          mascots: newMascots,
+          movesRemaining: 0,
+          phase: PHASES.CHECK_WIN,
+          winner,
+          log: logEntries,
         }
       }
 
-      const winner = checkWinCondition(newMascots)
-
+      // More moves remaining
       return {
         ...state,
         mascots: newMascots,
-        phase: PHASES.CHECK_WIN,
+        movesRemaining,
         winner,
-        pendingMoves: { p1: null, p2: null },
-        pendingLateral,
-        pendingLateralPlayer,
         log: logEntries,
       }
     }
 
     case 'RESOLVE_LATERAL': {
-      const { row, col, player } = action.payload
-      const opponent = player === 'p1' ? 'p2' : 'p1'
-      const newMascots = { ...state.mascots, [opponent]: { row, col } }
+      const { row, col } = action.payload
+      const newMascots = { ...state.mascots, [activePlayer]: { row, col } }
 
-      const chainResult = resolveChain(
-        state.grid, { row, col }, player, state.silverquillImmunity,
+      const chain = resolveChain(
+        state.grid, { row, col }, activePlayer, state.silverquillImmunity,
         { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
       )
-      newMascots[opponent] = chainResult.finalPos
+      newMascots[activePlayer] = chain.finalPos
 
-      const winner = checkWinCondition(newMascots)
+      const winner = checkWinCondition(newMascots, activePlayer)
+      const movesRemaining = state.movesRemaining
+
+      const logEntries = [...state.log, `Slides laterally to (${row},${col}).`]
+
+      if (movesRemaining <= 0 || winner) {
+        return {
+          ...state,
+          mascots: newMascots,
+          movesRemaining: 0,
+          phase: PHASES.CHECK_WIN,
+          winner,
+          pendingLateral: null,
+          log: logEntries,
+        }
+      }
 
       return {
         ...state,
         mascots: newMascots,
         winner,
         pendingLateral: null,
-        pendingLateralPlayer: null,
-        log: [...state.log, `Mascot slides laterally to (${row},${col}).`],
+        log: logEntries,
       }
     }
 
     case 'SKIP_LATERAL': {
-      return { ...state, pendingLateral: null, pendingLateralPlayer: null }
+      const movesRemaining = state.movesRemaining
+      if (movesRemaining <= 0) {
+        return { ...state, pendingLateral: null, phase: PHASES.CHECK_WIN }
+      }
+      return { ...state, pendingLateral: null }
     }
 
-    // === END_TURN: start next round, alternate who goes first ===
+    // Skip remaining moves
+    case 'END_MOVE_PHASE': {
+      return {
+        ...state,
+        movesRemaining: 0,
+        phase: PHASES.CHECK_WIN,
+      }
+    }
+
     case 'END_TURN': {
-      const silverquillImmunity = null // Clears each round
-      const nextFirst = state.firstPlayer === 'p1' ? 'p2' : 'p1'
-      const nextPhase = nextFirst === 'p1' ? PHASES.P1_DRAW : PHASES.P2_DRAW
+      const nextPlayer = activePlayer === 'p1' ? 'p2' : 'p1'
+      const silverquillImmunity =
+        state.silverquillImmunity === activePlayer ? null : state.silverquillImmunity
 
       return {
         ...state,
-        phase: nextPhase,
-        firstPlayer: nextFirst,
+        activePlayer: nextPlayer,
+        phase: PHASES.DRAW,
         turnCount: state.turnCount + 1,
         silverquillImmunity,
+        movesRemaining: 0,
+        hasPlayedCard: false,
         pendingLateral: null,
-        pendingLateralPlayer: null,
-        log: [...state.log, `--- Turn ${state.turnCount + 1} (${nextFirst} goes first) ---`],
+        log: [...state.log, `--- ${nextPlayer}'s turn ---`],
       }
     }
 
     case 'ACTIVATE_COLLEGE': {
-      const { college, params, player } = action.payload
-      return applyCollegeReducer(state, college, params, player)
+      const { college, params } = action.payload
+      return applyCollegeReducer(state, college, params, activePlayer)
     }
 
     default:
@@ -335,13 +298,22 @@ export function gameReducer(state, action) {
   }
 }
 
+// Win condition: you win by reaching the OPPOSITE goal row
+// P1 starts row 5, wins at row 0. P2 starts row 0, wins at row 5.
+function checkWinConditionForPlayer(mascots, player) {
+  if (player === 'p1' && mascots.p1.row === 0) return 'p1'
+  if (player === 'p2' && mascots.p2.row === 5) return 'p2'
+  return null
+}
+
+// Override the imported checkWinCondition to check the active player
 function tileEffectName(color) {
   switch (color) {
-    case 'red': return 'Red tile — pushed forward'
-    case 'black': return 'Black tile — pushed backward'
-    case 'white': return 'White tile — lateral slide'
-    case 'green': return 'Green wall — blocked'
-    case 'blue': return 'Blue tile — portal'
+    case 'red': return 'Red — pushed forward'
+    case 'black': return 'Black — pushed backward'
+    case 'white': return 'White — lateral slide'
+    case 'green': return 'Green — wall'
+    case 'blue': return 'Blue — portal'
     default: return color
   }
 }
@@ -356,18 +328,12 @@ function applyCollegeReducer(state, college, params, activePlayer) {
       for (let r = centerRow - 1; r <= centerRow + 1; r++) {
         for (let c = centerCol - 1; c <= centerCol + 1; c++) {
           if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-            grid[r][c] = {
-              color: 'colorless',
-              card: { name: 'Destroyed', color: 'colorless', scryfallName: 'Wastes' },
-            }
+            grid[r][c] = { color: 'colorless', card: { name: 'Destroyed', color: 'colorless', scryfallName: 'Wastes' } }
           }
         }
       }
       if (wallRow >= 0 && wallRow < ROWS && wallCol >= 0 && wallCol < COLS) {
-        grid[wallRow][wallCol] = {
-          color: 'green',
-          card: { name: 'Witherbloom Wall', color: 'green', scryfallName: 'Forest' },
-        }
+        grid[wallRow][wallCol] = { color: 'green', card: { name: 'Witherbloom Wall', color: 'green', scryfallName: 'Forest' } }
       }
       log.push(`Witherbloom NUKE! 3x3 area destroyed around (${centerRow},${centerCol}).`)
       return { ...state, grid, log }
@@ -391,12 +357,8 @@ function applyCollegeReducer(state, college, params, activePlayer) {
 
     case 'quandrix': {
       const blueTiles = []
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          if (grid[r][c].color === 'blue') {
-            blueTiles.push({ row: r, col: c })
-          }
-        }
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        if (grid[r][c].color === 'blue') blueTiles.push({ row: r, col: c })
       }
       log.push(`Quandrix links ${blueTiles.length} blue portals!`)
       return { ...state, portalLinks: blueTiles, log }

@@ -110,8 +110,18 @@ export function getValidMoves(grid, mascotPos, activePlayer) {
   return moves
 }
 
-export function checkWinCondition(mascots) {
-  if (mascots.p2.row === P2_GOAL_ROW) return 'p1'
-  if (mascots.p1.row === P1_GOAL_ROW) return 'p2'
+// Check win: player wins by reaching the opposite end
+// P1 starts row 5, wins at row 0 (P2_GOAL_ROW)
+// P2 starts row 0, wins at row 5 (P1_GOAL_ROW)
+export function checkWinCondition(mascots, activePlayer) {
+  // If activePlayer specified, only check that player
+  if (activePlayer) {
+    if (activePlayer === 'p1' && mascots.p1.row === P2_GOAL_ROW) return 'p1'
+    if (activePlayer === 'p2' && mascots.p2.row === P1_GOAL_ROW) return 'p2'
+    return null
+  }
+  // Check both (for backwards compat)
+  if (mascots.p1.row === P2_GOAL_ROW) return 'p1'
+  if (mascots.p2.row === P1_GOAL_ROW) return 'p2'
   return null
 }

@@ -1,6 +1,7 @@
 export const ROWS = 6
 export const COLS = 3
 export const CHAIN_CAP = 10
+export const MOVE_STEPS = 2
 
 export const COLORS = ['white', 'blue', 'black', 'red', 'green', 'colorless']
 
@@ -12,14 +13,12 @@ export const COLLEGES = {
   prismari: { colors: ['red', 'blue'], name: 'Prismari' },
 }
 
-// Turn flow: P1 draws → P1 plays terrain → P2 draws → P2 plays terrain → Both move → Resolve → Check win
+// Alternating turns: Draw → Play 1 card → Move own mascot 2 steps → Resolve → Check win → Next player
 export const PHASES = {
-  P1_DRAW: 'p1_draw',
-  P1_PLAY: 'p1_play',
-  P2_DRAW: 'p2_draw',
-  P2_PLAY: 'p2_play',
-  MOVE: 'move',         // Both players choose moves (collected before resolving)
-  RESOLVE: 'resolve',   // Both moves execute simultaneously
+  DRAW: 'draw',
+  PLAY: 'play',
+  MOVE: 'move',
+  RESOLVE: 'resolve',
   CHECK_WIN: 'checkWin',
 }
 

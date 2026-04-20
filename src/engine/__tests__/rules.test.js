@@ -140,15 +140,20 @@ describe('getValidMoves', () => {
 })
 
 describe('checkWinCondition', () => {
-  it('p1 wins when p2 mascot is at row 0', () => {
-    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 0, col: 1 } })).toBe('p1')
+  it('p1 wins by reaching row 0', () => {
+    expect(checkWinCondition({ p1: { row: 0, col: 1 }, p2: { row: 3, col: 1 } }, 'p1')).toBe('p1')
   })
 
-  it('p2 wins when p1 mascot is at row 5', () => {
-    expect(checkWinCondition({ p1: { row: 5, col: 1 }, p2: { row: 3, col: 1 } })).toBe('p2')
+  it('p2 wins by reaching row 5', () => {
+    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 5, col: 1 } }, 'p2')).toBe('p2')
   })
 
   it('returns null when no winner', () => {
-    expect(checkWinCondition({ p1: { row: 2, col: 1 }, p2: { row: 4, col: 1 } })).toBe(null)
+    expect(checkWinCondition({ p1: { row: 2, col: 1 }, p2: { row: 4, col: 1 } }, 'p1')).toBe(null)
+  })
+
+  it('backwards compat: checks both without activePlayer', () => {
+    expect(checkWinCondition({ p1: { row: 0, col: 1 }, p2: { row: 3, col: 1 } })).toBe('p1')
+    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 5, col: 1 } })).toBe('p2')
   })
 })
