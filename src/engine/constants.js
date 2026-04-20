@@ -12,11 +12,14 @@ export const COLLEGES = {
   prismari: { colors: ['red', 'blue'], name: 'Prismari' },
 }
 
+// Turn flow: P1 draws → P1 plays terrain → P2 draws → P2 plays terrain → Both move → Resolve → Check win
 export const PHASES = {
-  DRAW: 'draw',
-  PLAY: 'play',
-  MOVE: 'move',
-  RESOLVE: 'resolve',
+  P1_DRAW: 'p1_draw',
+  P1_PLAY: 'p1_play',
+  P2_DRAW: 'p2_draw',
+  P2_PLAY: 'p2_play',
+  MOVE: 'move',         // Both players choose moves (collected before resolving)
+  RESOLVE: 'resolve',   // Both moves execute simultaneously
   CHECK_WIN: 'checkWin',
 }
 

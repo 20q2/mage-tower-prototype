@@ -7,7 +7,7 @@ import PassScreen from './PassScreen'
 import { createInitialState, gameReducer } from '../engine/gameState'
 import { getValidMoves } from '../engine/rules'
 import { chooseCardPlay, chooseMove } from '../engine/ai'
-import { PHASES, ROWS, COLS } from '../engine/constants'
+import { PHASES } from '../engine/constants'
 
 export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const [state, dispatch] = useReducer(gameReducer, null, () =>
@@ -17,171 +17,211 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const [selectedCardIndex, setSelectedCardIndex] = useState(null)
   const [showPassScreen, setShowPassScreen] = useState(false)
   const [showLog, setShowLog] = useState(false)
-  const prevTurnRef = useRef(state.turnCount)
   const logBottomRef = useRef(null)
 
-  const {
-    grid, mascots, hands, phase, activePlayer,
-    turnCount, winner, pendingLateral, log,
-  } = state
+  const { grid, mascots, hands, phase, turnCount, winner, pendingMoves, pendingLateral, log } = state
 
-  const opponent = activePlayer === 'p1' ? 'p2' : 'p1'
-  const isAiTurn = mode === 'ai' && activePlayer === 'p2'
-  const isHumanTurn = !isAiTurn
+  const isAI = mode === 'ai'
 
-  // Scroll log to bottom
+  // Who is "active" right now?
+  const activePlayer =
+    phase === PHASES.P1_DRAW || phase === PHASES.P1_PLAY ? 'p1' :
+    phase === PHASES.P2_DRAW || phase === PHASES.P2_PLAY ? 'p2' :
+    null // MOVE/RESOLVE/CHECK_WIN are shared
+
+  const isAiTurn = isAI && activePlayer === 'p2'
+  const isHumanPlayPhase = (phase === PHASES.P1_PLAY) || (phase === PHASES.P2_PLAY && !isAI)
+  const isHumanMovePhase = phase === PHASES.MOVE && !winner
+
+  // In move phase, which player still needs to submit?
+  const p1NeedsMove = phase === PHASES.MOVE && pendingMoves.p1 === null
+  const p2NeedsMove = phase === PHASES.MOVE && pendingMoves.p2 === null
+  const humanNeedsMove = isHumanMovePhase && p1NeedsMove
+  const aiNeedsMove = isAI && p2NeedsMove
+
+  // Valid moves for the human during move phase (P1 moves P2's mascot)
+  const validMovesP1 = humanNeedsMove
+    ? getValidMoves(grid, mascots.p2, 'p1')
+    : []
+
+  // Hot-seat: P2 moves P1's mascot
+  const validMovesP2 = !isAI && p2NeedsMove
+    ? getValidMoves(grid, mascots.p1, 'p2')
+    : []
+
+  // Scroll log
   useEffect(() => {
     if (showLog) logBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [log.length, showLog])
 
-  // Hot-seat: show pass screen on turn change
+  // Hot-seat: pass screen between P1 play → P2 play
   useEffect(() => {
-    if (mode === 'hotseat' && phase === PHASES.DRAW && turnCount > 1 && turnCount !== prevTurnRef.current) {
+    if (mode === 'hotseat' && phase === PHASES.P2_DRAW) {
       setShowPassScreen(true)
     }
-    prevTurnRef.current = turnCount
-  }, [turnCount, phase, mode])
+  }, [phase, mode])
 
-  // Auto-advance DRAW
+  // === Auto-advance draws ===
   useEffect(() => {
-    if (phase !== PHASES.DRAW || winner || showPassScreen) return
-    const t = setTimeout(() => dispatch({ type: 'DRAW_CARD' }), 400)
-    return () => clearTimeout(t)
+    if (phase === PHASES.P1_DRAW && !winner) {
+      const t = setTimeout(() => dispatch({ type: 'DRAW_CARD', payload: { player: 'p1' } }), 400)
+      return () => clearTimeout(t)
+    }
+  }, [phase, winner])
+
+  useEffect(() => {
+    if (phase === PHASES.P2_DRAW && !winner && !showPassScreen) {
+      const t = setTimeout(() => dispatch({ type: 'DRAW_CARD', payload: { player: 'p2' } }), 400)
+      return () => clearTimeout(t)
+    }
   }, [phase, winner, showPassScreen])
 
-  // Auto-advance CHECK_WIN
+  // === AI: play phase ===
+  useEffect(() => {
+    if (!isAiTurn || phase !== PHASES.P2_PLAY || winner) return
+    const t = setTimeout(() => {
+      const aiState = { ...state, activePlayer: 'p2' }
+      const play = chooseCardPlay(aiState)
+      if (play) {
+        const card = hands.p2[play.cardIndex]
+        dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col, player: 'p2' } })
+        if (card?.college) {
+          dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, play.row, play.col), player: 'p2' } })
+        }
+      }
+      setTimeout(() => dispatch({ type: 'END_PLAY_PHASE', payload: { player: 'p2' } }), 300)
+    }, 600)
+    return () => clearTimeout(t)
+  }, [isAiTurn, phase, winner])
+
+  // === AI: move phase — AI submits its move ===
+  useEffect(() => {
+    if (!aiNeedsMove || winner) return
+    const t = setTimeout(() => {
+      const aiState = { ...state, activePlayer: 'p2' }
+      const move = chooseMove(aiState)
+      if (move) {
+        dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p2', row: move.row, col: move.col } })
+      }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [aiNeedsMove, winner])
+
+  // === Auto-resolve when both moves are in ===
+  useEffect(() => {
+    if (phase !== PHASES.RESOLVE) return
+    const t = setTimeout(() => dispatch({ type: 'RESOLVE_MOVES' }), 400)
+    return () => clearTimeout(t)
+  }, [phase])
+
+  // === Auto-advance CHECK_WIN → next turn ===
   useEffect(() => {
     if (phase !== PHASES.CHECK_WIN || winner || pendingLateral) return
-    const t = setTimeout(() => dispatch({ type: 'END_TURN' }), 300)
+    const t = setTimeout(() => dispatch({ type: 'END_TURN' }), 500)
     return () => clearTimeout(t)
   }, [phase, winner, pendingLateral])
 
-  // AI: PLAY
-  useEffect(() => {
-    if (!isAiTurn || phase !== PHASES.PLAY || winner) return
-    const t = setTimeout(() => {
-      const play = chooseCardPlay(state)
-      if (play) {
-        const card = hands[activePlayer][play.cardIndex]
-        dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col } })
-        if (card?.college) {
-          dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, play.row, play.col, state) } })
-        }
-      }
-      setTimeout(() => dispatch({ type: 'END_PLAY_PHASE' }), 200)
-    }, 500)
-    return () => clearTimeout(t)
-  }, [isAiTurn, phase, winner])
-
-  // AI: MOVE
-  useEffect(() => {
-    if (!isAiTurn || phase !== PHASES.MOVE || winner) return
-    const t = setTimeout(() => {
-      const move = chooseMove(state)
-      if (move) dispatch({ type: 'MOVE_MASCOT', payload: { row: move.row, col: move.col } })
-    }, 800)
-    return () => clearTimeout(t)
-  }, [isAiTurn, phase, winner])
-
-  // AI: lateral
-  useEffect(() => {
-    if (!isAiTurn || !pendingLateral || winner) return
-    const t = setTimeout(() => {
-      if (pendingLateral.length > 0) {
-        dispatch({ type: 'RESOLVE_LATERAL', payload: pendingLateral[0] })
-      } else {
-        dispatch({ type: 'SKIP_LATERAL' })
-      }
-    }, 500)
-    return () => clearTimeout(t)
-  }, [isAiTurn, pendingLateral, winner])
-
-  const validMoves = phase === PHASES.MOVE && isHumanTurn && !winner
-    ? getValidMoves(grid, mascots[opponent], activePlayer)
-    : []
-
+  // === Tile click handler ===
   const handleTileClick = useCallback((row, col) => {
-    if (winner || !isHumanTurn) return
+    if (winner) return
 
+    // Lateral resolution
     if (pendingLateral?.length > 0) {
       if (pendingLateral.some(o => o.row === row && o.col === col)) {
-        dispatch({ type: 'RESOLVE_LATERAL', payload: { row, col } })
+        dispatch({ type: 'RESOLVE_LATERAL', payload: { row, col, player: state.pendingLateralPlayer } })
       }
       return
     }
 
-    if (phase === PHASES.PLAY && selectedCardIndex !== null) {
-      const card = hands[activePlayer][selectedCardIndex]
-      dispatch({ type: 'PLAY_CARD', payload: { cardIndex: selectedCardIndex, row, col } })
+    // Play phase: click-to-place
+    if (isHumanPlayPhase && selectedCardIndex !== null) {
+      const player = activePlayer
+      const card = hands[player][selectedCardIndex]
+      dispatch({ type: 'PLAY_CARD', payload: { cardIndex: selectedCardIndex, row, col, player } })
       if (card?.college) {
-        dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col, state) } })
+        dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col), player } })
       }
       setSelectedCardIndex(null)
       return
     }
 
-    if (phase === PHASES.MOVE) {
-      if (validMoves.some(m => m.row === row && m.col === col)) {
-        dispatch({ type: 'MOVE_MASCOT', payload: { row, col } })
-      }
+    // Move phase: P1 clicks to move P2's mascot
+    if (humanNeedsMove && validMovesP1.some(m => m.row === row && m.col === col)) {
+      dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p1', row, col } })
+      return
     }
-  }, [winner, isHumanTurn, pendingLateral, phase, selectedCardIndex, hands, activePlayer, validMoves, state])
 
-  const handleCardSelect = useCallback((index) => {
-    if (phase !== PHASES.PLAY || !isHumanTurn || winner) return
-    setSelectedCardIndex(prev => prev === index ? null : index)
-  }, [phase, isHumanTurn, winner])
+    // Hot-seat move phase: P2 clicks to move P1's mascot
+    if (!isAI && p2NeedsMove && !p1NeedsMove && validMovesP2.some(m => m.row === row && m.col === col)) {
+      dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p2', row, col } })
+      return
+    }
+  }, [winner, pendingLateral, isHumanPlayPhase, selectedCardIndex, hands, activePlayer, humanNeedsMove, validMovesP1, p2NeedsMove, p1NeedsMove, validMovesP2, isAI, state])
 
-  // Drag & drop: card dropped on a tile
+  // === Drop card handler ===
   const handleDropCard = useCallback((cardIndex, row, col) => {
-    if (phase !== PHASES.PLAY || !isHumanTurn || winner) return
-    const card = hands[activePlayer][cardIndex]
-    dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col } })
+    if (!isHumanPlayPhase || winner) return
+    const player = activePlayer
+    const card = hands[player][cardIndex]
+    dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col, player } })
     if (card?.college) {
-      dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col, state) } })
+      dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col), player } })
     }
     setSelectedCardIndex(null)
-  }, [phase, isHumanTurn, winner, hands, activePlayer, state])
+  }, [isHumanPlayPhase, winner, hands, activePlayer, state])
 
-  const canDropCards = phase === PHASES.PLAY && isHumanTurn && !winner
+  const handleCardSelect = useCallback((index) => {
+    if (!isHumanPlayPhase || winner) return
+    setSelectedCardIndex(prev => prev === index ? null : index)
+  }, [isHumanPlayPhase, winner])
 
-  // Phase display
-  const phaseInfo = {
-    [PHASES.DRAW]: { label: 'Drawing...', color: '#3b82f6' },
-    [PHASES.PLAY]: { label: 'Play Cards', color: '#a855f7' },
-    [PHASES.MOVE]: { label: 'Move Opponent', color: '#ef4444' },
-    [PHASES.RESOLVE]: { label: 'Resolving...', color: '#22c55e' },
-    [PHASES.CHECK_WIN]: { label: '...', color: '#f59e0b' },
-  }[phase] || { label: phase, color: '#888' }
+  const canDropCards = isHumanPlayPhase && !winner
 
-  const playerColor = activePlayer === 'p1' ? '#4ade80' : '#a78bfa'
-  const playerName = activePlayer === 'p1' ? 'Player 1' : 'Player 2'
+  // === Phase display ===
+  const phaseLabel = {
+    [PHASES.P1_DRAW]: 'P1 Drawing...',
+    [PHASES.P1_PLAY]: 'P1 Place Terrain',
+    [PHASES.P2_DRAW]: 'P2 Drawing...',
+    [PHASES.P2_PLAY]: isAI ? 'AI Placing...' : 'P2 Place Terrain',
+    [PHASES.MOVE]: 'Choose Movement',
+    [PHASES.RESOLVE]: 'Resolving...',
+    [PHASES.CHECK_WIN]: '...',
+  }[phase] || phase
+
+  const phaseColor = {
+    [PHASES.P1_DRAW]: '#3b82f6',
+    [PHASES.P1_PLAY]: '#4ade80',
+    [PHASES.P2_DRAW]: '#3b82f6',
+    [PHASES.P2_PLAY]: '#a78bfa',
+    [PHASES.MOVE]: '#ef4444',
+    [PHASES.RESOLVE]: '#f59e0b',
+    [PHASES.CHECK_WIN]: '#f59e0b',
+  }[phase] || '#888'
+
+  // Which valid moves to highlight?
+  const highlightedMoves = humanNeedsMove
+    ? validMovesP1
+    : (!isAI && p2NeedsMove && !p1NeedsMove ? validMovesP2 : [])
+
+  // Which hand to show?
+  const visibleHand = isHumanPlayPhase ? hands[activePlayer] : (humanNeedsMove ? hands.p1 : [])
 
   return (
     <div className="game-screen">
       {/* TOP BAR */}
       <div className="top-bar">
-        <button
-          onClick={onExit}
-          style={{ background: 'none', color: 'var(--text-muted)', fontSize: '12px', padding: '4px 8px' }}
-        >
+        <button onClick={onExit} style={{ background: 'none', color: 'var(--text-muted)', fontSize: '12px', padding: '4px 8px' }}>
           ← Menu
         </button>
 
-        <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-          Turn {turnCount}
-        </span>
-
-        <span style={{ fontFamily: 'Cinzel, serif', fontWeight: 700, fontSize: '16px', color: playerColor }}>
-          {playerName}
-        </span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Turn {turnCount}</span>
 
         <motion.span
           key={phase}
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           style={{
-            background: phaseInfo.color,
+            background: phaseColor,
             color: 'white',
             padding: '4px 12px',
             borderRadius: '6px',
@@ -190,12 +230,12 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
             textTransform: 'uppercase',
           }}
         >
-          {phaseInfo.label}
+          {phaseLabel}
         </motion.span>
 
-        {isAiTurn && (
+        {phase === PHASES.MOVE && pendingMoves.p1 && !pendingMoves.p2 && isAI && (
           <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
-            AI thinking...
+            AI choosing move...
           </span>
         )}
 
@@ -204,10 +244,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
           style={{
             background: showLog ? 'var(--accent-gold)' : 'none',
             color: showLog ? 'var(--bg-dark)' : 'var(--text-muted)',
-            fontSize: '12px',
-            padding: '4px 10px',
-            borderRadius: '4px',
-            marginLeft: 'auto',
+            fontSize: '12px', padding: '4px 10px', borderRadius: '4px', marginLeft: 'auto',
           }}
         >
           Log
@@ -219,7 +256,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
         <Board
           grid={grid}
           mascots={mascots}
-          validMoves={[...validMoves, ...(pendingLateral && isHumanTurn ? pendingLateral : [])]}
+          validMoves={[...highlightedMoves, ...(pendingLateral || [])]}
           onTileClick={handleTileClick}
           onDropCard={handleDropCard}
           canDropCards={canDropCards}
@@ -239,28 +276,27 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
 
       {/* BOTTOM BAR */}
       <div className="bottom-bar">
-        {/* Controls strip */}
         <div className="controls-strip">
-          {phase === PHASES.PLAY && isHumanTurn && (
+          {isHumanPlayPhase && (
             <>
               <span className="hint">Drag a card onto the board, or click to select & place</span>
               <button className="btn btn--primary" onClick={() => {
                 setSelectedCardIndex(null)
-                dispatch({ type: 'END_PLAY_PHASE' })
+                dispatch({ type: 'END_PLAY_PHASE', payload: { player: activePlayer } })
               }}>
                 Done Playing
               </button>
             </>
           )}
 
-          {phase === PHASES.MOVE && isHumanTurn && !pendingLateral && (
+          {humanNeedsMove && (
             <>
-              <span className="hint">Click a glowing tile to move {opponent}'s mascot</span>
-              {validMoves.map(m => (
+              <span className="hint">Click a glowing tile to push P2's mascot</span>
+              {validMovesP1.map(m => (
                 <button
                   key={`${m.row}-${m.col}`}
                   className="btn"
-                  onClick={() => dispatch({ type: 'MOVE_MASCOT', payload: m })}
+                  onClick={() => dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p1', row: m.row, col: m.col } })}
                 >
                   {m.direction.charAt(0).toUpperCase() + m.direction.slice(1)}
                 </button>
@@ -268,38 +304,64 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
             </>
           )}
 
-          {pendingLateral && isHumanTurn && (
+          {!isAI && p2NeedsMove && !p1NeedsMove && (
             <>
-              <span className="hint" style={{ color: 'var(--accent-gold)' }}>
-                White tile! Slide sideways?
-              </span>
-              <button className="btn" onClick={() => dispatch({ type: 'SKIP_LATERAL' })}>
-                Skip
-              </button>
+              <span className="hint">P2: Click a glowing tile to push P1's mascot</span>
+              {validMovesP2.map(m => (
+                <button
+                  key={`${m.row}-${m.col}`}
+                  className="btn"
+                  onClick={() => dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p2', row: m.row, col: m.col } })}
+                >
+                  {m.direction.charAt(0).toUpperCase() + m.direction.slice(1)}
+                </button>
+              ))}
             </>
           )}
 
-          {phase === PHASES.DRAW && !isAiTurn && (
+          {phase === PHASES.MOVE && pendingMoves.p1 && (isAI ? !pendingMoves.p2 : false) && (
+            <span className="hint">Waiting for opponent...</span>
+          )}
+
+          {pendingLateral && (
+            <>
+              <span className="hint" style={{ color: 'var(--accent-gold)' }}>White tile! Slide sideways?</span>
+              <button className="btn" onClick={() => dispatch({ type: 'SKIP_LATERAL' })}>Skip</button>
+            </>
+          )}
+
+          {(phase === PHASES.P1_DRAW || phase === PHASES.P2_DRAW) && (
             <span className="hint">Drawing...</span>
           )}
 
-          {isAiTurn && <span className="hint">Opponent's turn...</span>}
+          {isAiTurn && phase === PHASES.P2_PLAY && (
+            <span className="hint">AI placing terrain...</span>
+          )}
+
+          {phase === PHASES.RESOLVE && <span className="hint">Resolving movement...</span>}
         </div>
 
-        {/* Hand */}
-        <PlayerHand
-          cards={hands[activePlayer]}
-          selectedIndex={phase === PHASES.PLAY && isHumanTurn ? selectedCardIndex : null}
-          onSelect={handleCardSelect}
-          canDrag={canDropCards}
-        />
+        {/* Hand: show during play phases and P1 move phase */}
+        {(isHumanPlayPhase || humanNeedsMove) && (
+          <PlayerHand
+            cards={isHumanPlayPhase ? hands[activePlayer] : []}
+            selectedIndex={isHumanPlayPhase ? selectedCardIndex : null}
+            onSelect={handleCardSelect}
+            canDrag={canDropCards}
+          />
+        )}
+
+        {/* Hot-seat P2 move: no hand shown, just controls */}
+        {!isAI && p2NeedsMove && !p1NeedsMove && (
+          <div style={{ minHeight: '40px' }} />
+        )}
       </div>
 
       {/* PASS SCREEN */}
       <AnimatePresence>
         {showPassScreen && (
           <PassScreen
-            nextPlayer={activePlayer}
+            nextPlayer="p2"
             onReady={() => setShowPassScreen(false)}
           />
         )}
@@ -320,7 +382,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   )
 }
 
-function buildCollegeParams(college, row, col, state) {
+function buildCollegeParams(college, row, col) {
   switch (college) {
     case 'witherbloom':
       return { centerRow: row, centerCol: col, wallRow: row, wallCol: col }

@@ -29,12 +29,10 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
   const p1Cards = shuffleArray(DECKS[p1DeckKey].cards.map(addId))
   const p2Cards = shuffleArray(DECKS[p2DeckKey].cards.map(addId))
 
-  // Grid starts EMPTY — no cards dealt to board
   const grid = Array.from({ length: ROWS }, () =>
     Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
   )
 
-  // Deal 3 cards to each hand from their full deck
   const p1Hand = p1Cards.splice(0, 3)
   const p2Hand = p2Cards.splice(0, 3)
 
@@ -47,45 +45,52 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
     hands: { p1: p1Hand, p2: p2Hand },
     decks: { p1: p1Cards, p2: p2Cards },
     discard: [],
-    phase: PHASES.DRAW,
-    activePlayer: 'p1',
+    phase: PHASES.P1_DRAW,
     turnCount: 1,
     winner: null,
+    // Simultaneous move collection
+    pendingMoves: { p1: null, p2: null },
+    // College state
     portalLinks: [],
     silverquillImmunity: null,
     prismariBoostRow: null,
     blueBonusDraws: { p1: 0, p2: 0 },
+    // Lateral choice after resolve
+    pendingLateral: null,
+    pendingLateralPlayer: null,
     log: ['Game started!'],
   }
 }
 
 export function gameReducer(state, action) {
-  const { activePlayer } = state
-  const opponent = activePlayer === 'p1' ? 'p2' : 'p1'
-
   switch (action.type) {
+    // === DRAW: specified player draws ===
     case 'DRAW_CARD': {
-      const deck = [...state.decks[activePlayer]]
-      const hand = [...state.hands[activePlayer]]
-      const bonusDraws = state.blueBonusDraws[activePlayer]
+      const player = action.payload?.player || 'p1'
+      const deck = [...state.decks[player]]
+      const hand = [...state.hands[player]]
+      const bonusDraws = state.blueBonusDraws[player]
       const totalDraws = 1 + bonusDraws
-
       const drawn = deck.splice(0, Math.min(totalDraws, deck.length))
       hand.push(...drawn)
 
+      // After P1 draws → P1 plays. After P2 draws → P2 plays.
+      const nextPhase = player === 'p1' ? PHASES.P1_PLAY : PHASES.P2_PLAY
+
       return {
         ...state,
-        decks: { ...state.decks, [activePlayer]: deck },
-        hands: { ...state.hands, [activePlayer]: hand },
-        blueBonusDraws: { ...state.blueBonusDraws, [activePlayer]: 0 },
-        phase: PHASES.PLAY,
-        log: [...state.log, `${activePlayer} draws ${drawn.length} card(s).`],
+        decks: { ...state.decks, [player]: deck },
+        hands: { ...state.hands, [player]: hand },
+        blueBonusDraws: { ...state.blueBonusDraws, [player]: 0 },
+        phase: nextPhase,
+        log: [...state.log, `${player} draws ${drawn.length} card(s).`],
       }
     }
 
+    // === PLAY: place a card on the grid ===
     case 'PLAY_CARD': {
-      const { cardIndex, row, col } = action.payload
-      const hand = [...state.hands[activePlayer]]
+      const { cardIndex, row, col, player } = action.payload
+      const hand = [...state.hands[player]]
       const card = hand[cardIndex]
       hand.splice(cardIndex, 1)
 
@@ -93,53 +98,93 @@ export function gameReducer(state, action) {
       const oldTileCard = grid[row][col].card
       const discard = oldTileCard ? [...state.discard, oldTileCard] : [...state.discard]
 
-      // College cards: show the actual card on the tile
-      // Mono-color cards: show a basic land to represent that color
       const isCollege = !!card.college
       const tileCard = isCollege
         ? card
         : { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
-
       grid[row][col] = { color: card.color, card: tileCard }
 
       const blueBonusDraws = { ...state.blueBonusDraws }
       if (card.color === 'blue') {
-        blueBonusDraws[activePlayer] = (blueBonusDraws[activePlayer] || 0) + 1
+        blueBonusDraws[player] = (blueBonusDraws[player] || 0) + 1
       }
 
       return {
         ...state,
         grid,
-        hands: { ...state.hands, [activePlayer]: hand },
+        hands: { ...state.hands, [player]: hand },
         discard,
         blueBonusDraws,
-        log: [...state.log, `${activePlayer} plays ${card.name} at (${row},${col}).`],
+        log: [...state.log, `${player} plays ${card.name} at (${row},${col}).`],
       }
     }
 
+    // === END PLAY: finish placing terrain ===
     case 'END_PLAY_PHASE': {
-      return { ...state, phase: PHASES.MOVE }
+      const { player } = action.payload
+      if (player === 'p1') {
+        // P1 done → P2 draws
+        return { ...state, phase: PHASES.P2_DRAW }
+      } else {
+        // P2 done → simultaneous move phase
+        return {
+          ...state,
+          phase: PHASES.MOVE,
+          pendingMoves: { p1: null, p2: null },
+          log: [...state.log, '--- Both players choose movement ---'],
+        }
+      }
     }
 
-    case 'MOVE_MASCOT': {
-      const { row, col } = action.payload
-      const newMascots = {
-        ...state.mascots,
-        [opponent]: { row, col },
+    // === SUBMIT_MOVE: one player locks in their move choice ===
+    case 'SUBMIT_MOVE': {
+      const { player, row, col } = action.payload
+      const pendingMoves = { ...state.pendingMoves, [player]: { row, col } }
+
+      // Check if both moves are submitted
+      const bothReady = pendingMoves.p1 !== null && pendingMoves.p2 !== null
+      if (bothReady) {
+        return { ...state, pendingMoves, phase: PHASES.RESOLVE }
+      }
+      return {
+        ...state,
+        pendingMoves,
+        log: [...state.log, `${player} has chosen their move.`],
+      }
+    }
+
+    // === RESOLVE: execute both moves simultaneously ===
+    case 'RESOLVE_MOVES': {
+      const { p1: p1Move, p2: p2Move } = state.pendingMoves
+      const newMascots = { ...state.mascots }
+      const logEntries = [...state.log]
+
+      // P1 moves P2's mascot (toward P2 goal = row 0)
+      if (p1Move) {
+        newMascots.p2 = { row: p1Move.row, col: p1Move.col }
+        const chain1 = resolveChain(
+          state.grid, p1Move, 'p1', state.silverquillImmunity,
+          { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
+        )
+        newMascots.p2 = chain1.finalPos
+        logEntries.push(`p1 pushes p2's mascot to (${p1Move.row},${p1Move.col}).`)
+        if (chain1.steps.length > 1) {
+          logEntries.push(`Chain! ${chain1.steps.length} steps.`)
+        }
       }
 
-      const chainResult = resolveChain(
-        state.grid,
-        { row, col },
-        activePlayer,
-        state.silverquillImmunity,
-        { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
-      )
-
-      const logEntries = [...state.log]
-      logEntries.push(`${activePlayer} moves ${opponent}'s mascot to (${row},${col}).`)
-      if (chainResult.steps.length > 1) {
-        logEntries.push(`Chain reaction! ${chainResult.steps.length} steps.`)
+      // P2 moves P1's mascot (toward P1 goal = row 5)
+      if (p2Move) {
+        newMascots.p1 = { row: p2Move.row, col: p2Move.col }
+        const chain2 = resolveChain(
+          state.grid, p2Move, 'p2', state.silverquillImmunity,
+          { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
+        )
+        newMascots.p1 = chain2.finalPos
+        logEntries.push(`p2 pushes p1's mascot to (${p2Move.row},${p2Move.col}).`)
+        if (chain2.steps.length > 1) {
+          logEntries.push(`Chain! ${chain2.steps.length} steps.`)
+        }
       }
 
       const winner = checkWinCondition(newMascots)
@@ -149,24 +194,18 @@ export function gameReducer(state, action) {
         mascots: newMascots,
         phase: PHASES.CHECK_WIN,
         winner,
+        pendingMoves: { p1: null, p2: null },
         log: logEntries,
-        pendingChain: chainResult.steps.length > 1 ? chainResult : null,
-        pendingLateral: chainResult.lateralOptions || null,
       }
     }
 
     case 'RESOLVE_LATERAL': {
-      const { row, col } = action.payload
-      const newMascots = {
-        ...state.mascots,
-        [opponent]: { row, col },
-      }
+      const { row, col, player } = action.payload
+      const opponent = player === 'p1' ? 'p2' : 'p1'
+      const newMascots = { ...state.mascots, [opponent]: { row, col } }
 
       const chainResult = resolveChain(
-        state.grid,
-        { row, col },
-        activePlayer,
-        state.silverquillImmunity,
+        state.grid, { row, col }, player, state.silverquillImmunity,
         { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
       )
       newMascots[opponent] = chainResult.finalPos
@@ -178,33 +217,33 @@ export function gameReducer(state, action) {
         mascots: newMascots,
         winner,
         pendingLateral: null,
+        pendingLateralPlayer: null,
         log: [...state.log, `Mascot slides laterally to (${row},${col}).`],
       }
     }
 
     case 'SKIP_LATERAL': {
-      return { ...state, pendingLateral: null }
+      return { ...state, pendingLateral: null, pendingLateralPlayer: null }
     }
 
+    // === END_TURN: start next round ===
     case 'END_TURN': {
-      const nextPlayer = activePlayer === 'p1' ? 'p2' : 'p1'
-      const silverquillImmunity =
-        state.silverquillImmunity === activePlayer ? null : state.silverquillImmunity
+      const silverquillImmunity = null // Clears each round
 
       return {
         ...state,
-        activePlayer: nextPlayer,
-        phase: PHASES.DRAW,
+        phase: PHASES.P1_DRAW,
         turnCount: state.turnCount + 1,
         silverquillImmunity,
         pendingLateral: null,
-        log: [...state.log, `--- Turn ${state.turnCount + 1}: ${nextPlayer}'s turn ---`],
+        pendingLateralPlayer: null,
+        log: [...state.log, `--- Turn ${state.turnCount + 1} ---`],
       }
     }
 
     case 'ACTIVATE_COLLEGE': {
-      const { college, params } = action.payload
-      return applyCollegeReducer(state, college, params, activePlayer)
+      const { college, params, player } = action.payload
+      return applyCollegeReducer(state, college, params, player)
     }
 
     default:
