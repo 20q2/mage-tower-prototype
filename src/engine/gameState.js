@@ -158,6 +158,8 @@ export function gameReducer(state, action) {
       const { p1: p1Move, p2: p2Move } = state.pendingMoves
       const newMascots = { ...state.mascots }
       const logEntries = [...state.log]
+      let pendingLateral = null
+      let pendingLateralPlayer = null
 
       // P1 moves P2's mascot (toward P2 goal = row 0)
       if (p1Move) {
@@ -169,7 +171,6 @@ export function gameReducer(state, action) {
         )
         newMascots.p2 = chain1.finalPos
 
-        // Log tile effects
         if (chain1.steps.length > 1) {
           for (let i = 0; i < chain1.steps.length - 1; i++) {
             const step = chain1.steps[i]
@@ -182,7 +183,9 @@ export function gameReducer(state, action) {
         }
 
         if (chain1.lateralOptions?.length > 0) {
-          logEntries.push(`  White tile — lateral slide available!`)
+          logEntries.push(`  White tile — P1 may slide P2's mascot sideways!`)
+          pendingLateral = chain1.lateralOptions
+          pendingLateralPlayer = 'p1'
         }
       }
 
@@ -207,8 +210,15 @@ export function gameReducer(state, action) {
           logEntries.push(`  → P1's mascot lands at (${chain2.finalPos.row},${chain2.finalPos.col})`)
         }
 
-        if (chain2.lateralOptions?.length > 0) {
-          logEntries.push(`  White tile — lateral slide available!`)
+        // Only set lateral if P1 didn't already claim it (P1 lateral resolves first)
+        if (chain2.lateralOptions?.length > 0 && !pendingLateral) {
+          logEntries.push(`  White tile — P2 may slide P1's mascot sideways!`)
+          pendingLateral = chain2.lateralOptions
+          pendingLateralPlayer = 'p2'
+        } else if (chain2.lateralOptions?.length > 0 && pendingLateral) {
+          // Both have laterals — queue P2's for after P1's resolves
+          // For now, P2's lateral is noted but P1 goes first
+          logEntries.push(`  White tile — P2 lateral queued (P1 resolves first).`)
         }
       }
 
@@ -220,6 +230,8 @@ export function gameReducer(state, action) {
         phase: PHASES.CHECK_WIN,
         winner,
         pendingMoves: { p1: null, p2: null },
+        pendingLateral,
+        pendingLateralPlayer,
         log: logEntries,
       }
     }

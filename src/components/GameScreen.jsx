@@ -126,6 +126,22 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     return () => clearTimeout(t)
   }, [phase])
 
+  // === AI auto-resolve lateral ===
+  useEffect(() => {
+    if (!pendingLateral || winner) return
+    // If the lateral belongs to the AI player, auto-pick the first option
+    if (isAI && state.pendingLateralPlayer === 'p2') {
+      const t = setTimeout(() => {
+        if (pendingLateral.length > 0) {
+          dispatch({ type: 'RESOLVE_LATERAL', payload: { ...pendingLateral[0], player: 'p2' } })
+        } else {
+          dispatch({ type: 'SKIP_LATERAL' })
+        }
+      }, 500)
+      return () => clearTimeout(t)
+    }
+  }, [pendingLateral, winner, isAI, state.pendingLateralPlayer])
+
   // === Auto-advance CHECK_WIN → next turn ===
   useEffect(() => {
     if (phase !== PHASES.CHECK_WIN || winner || pendingLateral) return
