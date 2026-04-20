@@ -32,12 +32,21 @@
   box-sizing: border-box;
 }
 
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
 body {
   font-family: 'Inter', sans-serif;
-  background: var(--bg-dark);
   color: var(--text-primary);
-  min-height: 100vh;
-  overflow: hidden;
+  /* Table felt texture via layered gradients */
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(30, 60, 30, 0.25) 0%, transparent 70%),
+    radial-gradient(ellipse at 50% 100%, rgba(0, 0, 0, 0.5) 0%, transparent 50%),
+    linear-gradient(180deg, #1a2a1a 0%, #0f1a0f 40%, #0a0f0a 100%);
+  background-attachment: fixed;
 }
 
 h1, h2, h3 {
@@ -49,6 +58,125 @@ button {
   cursor: pointer;
   border: none;
   outline: none;
+}
+
+/* Game screen root layout */
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+}
+
+/* Top bar: phase + log toggle */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(212, 168, 67, 0.15);
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+/* Board area: takes all remaining space */
+.board-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 0;
+  padding: 12px;
+}
+
+/* Bottom bar: player hand */
+.bottom-bar {
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(212, 168, 67, 0.15);
+  padding: 8px 16px 12px;
+  z-index: 20;
+}
+
+/* Game log overlay */
+.game-log-overlay {
+  position: fixed;
+  top: 52px;
+  right: 12px;
+  width: 280px;
+  max-height: 300px;
+  background: rgba(26, 18, 16, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 168, 67, 0.2);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  overflow-y: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.game-log-overlay h4 {
+  font-size: 12px;
+  color: var(--accent-gold);
+  margin-bottom: 6px;
+  font-family: 'Cinzel', serif;
+}
+
+.game-log-overlay .log-entry {
+  color: var(--text-secondary);
+  margin-bottom: 1px;
+}
+
+/* Controls strip above hand */
+.controls-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 0;
+  min-height: 36px;
+}
+
+.controls-strip .btn {
+  background: var(--bg-light);
+  color: var(--text-primary);
+  padding: 6px 18px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 13px;
+  border: 2px solid var(--accent-gold);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.controls-strip .btn:hover {
+  background: var(--accent-gold);
+  color: var(--bg-dark);
+}
+
+.controls-strip .btn:active {
+  transform: scale(0.96);
+}
+
+.controls-strip .btn--primary {
+  background: var(--accent-gold);
+  color: var(--bg-dark);
+  border-color: var(--accent-gold);
+}
+
+.controls-strip .btn--primary:hover {
+  background: var(--accent-glow);
+}
+
+.controls-strip .hint {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 @keyframes screen-shake {

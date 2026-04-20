@@ -1,7 +1,5 @@
 import { motion } from 'framer-motion'
 
-const MASCOT_SYMBOLS = { p1: 'P1', p2: 'P2' }
-
 export default function Mascot({ player }) {
   return (
     <motion.div
@@ -11,7 +9,7 @@ export default function Mascot({ player }) {
       initial={{ scale: 0 }}
       animate={{ scale: 1 }}
     >
-      {MASCOT_SYMBOLS[player]}
+      {player === 'p1' ? 'P1' : 'P2'}
     </motion.div>
   )
 }

@@ -2,9 +2,8 @@ import Tile from './Tile'
 import '../styles/board.css'
 import { ROWS, COLS } from '../engine/constants'
 
-export default function Board({ grid, mascots, validMoves, onTileClick, placeTargets }) {
+export default function Board({ grid, mascots, validMoves, onTileClick }) {
   const validMoveSet = new Set((validMoves || []).map((m) => `${m.row},${m.col}`))
-  const placeTargetSet = new Set((placeTargets || []).map((p) => `${p.row},${p.col}`))
 
   function getMascotAt(row, col) {
     if (mascots.p1.row === row && mascots.p1.col === col) return 'p1'
@@ -14,6 +13,11 @@ export default function Board({ grid, mascots, validMoves, onTileClick, placeTar
 
   return (
     <div className="board">
+      {/* P2 goal label */}
+      <div className="board__goal-label board__goal-label--p2">
+        ← P2 Goal →
+      </div>
+
       {Array.from({ length: ROWS }, (_, row) =>
         Array.from({ length: COLS }, (_, col) => (
           <Tile
@@ -24,10 +28,14 @@ export default function Board({ grid, mascots, validMoves, onTileClick, placeTar
             mascotHere={getMascotAt(row, col)}
             onTileClick={onTileClick}
             isValidMove={validMoveSet.has(`${row},${col}`)}
-            isPlaceTarget={placeTargetSet.has(`${row},${col}`)}
           />
         ))
       )}
+
+      {/* P1 goal label */}
+      <div className="board__goal-label board__goal-label--p1">
+        ← P1 Goal →
+      </div>
     </div>
   )
 }

@@ -8,12 +8,12 @@ const EFFECT_LABELS = {
   white: 'Slide L/R',
   red: '+1 Forward',
   black: '-1 Back',
-  green: 'Wall',
+  green: 'WALL',
   blue: 'Draw +1',
   colorless: '',
 }
 
-export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidMove, isPlaceTarget }) {
+export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidMove }) {
   const [imgFailed, setImgFailed] = useState(false)
   const imageUrl = tile.card ? getScryfallImageUrl(tile.card.scryfallName) : null
   const colorClass = tile.card?.college ? 'gold' : tile.color
@@ -36,7 +36,7 @@ export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidM
         .filter(Boolean)
         .join(' ')}
       onClick={() => onTileClick?.(row, col)}
-      whileHover={{ scale: 1.05 }}
+      whileHover={{ y: -3, scale: 1.03 }}
       whileTap={{ scale: 0.97 }}
     >
       {imageUrl && !imgFailed ? (
@@ -55,8 +55,15 @@ export default function Tile({ tile, row, col, mascotHere, onTileClick, isValidM
         <div className="tile__art tile__art--fallback" />
       )}
 
+      {/* Card name at top */}
+      {tile.card && tile.card.name && (
+        <div className="tile__card-name">{tile.card.name}</div>
+      )}
+
+      {/* Effect label at bottom */}
       {effectLabel && <div className="tile__effect-label">{effectLabel}</div>}
 
+      {/* Mascot token */}
       {mascotHere && <Mascot player={mascotHere} />}
     </motion.div>
   )

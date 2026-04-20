@@ -2,6 +2,15 @@ import { motion } from 'framer-motion'
 import { getScryfallImageUrl } from '../utils/scryfall'
 import { useState } from 'react'
 
+const COLOR_PIPS = {
+  white: '#f5f0e0',
+  blue: '#3b82f6',
+  black: '#2d2040',
+  red: '#ef4444',
+  green: '#22c55e',
+  colorless: '#9ca3af',
+}
+
 export default function Card({ card, index, isSelected, onSelect }) {
   const [imgFailed, setImgFailed] = useState(false)
   const imageUrl = getScryfallImageUrl(card.scryfallName)
@@ -17,11 +26,14 @@ export default function Card({ card, index, isSelected, onSelect }) {
         .filter(Boolean)
         .join(' ')}
       onClick={() => onSelect?.(index)}
-      whileHover={{ y: -8, scale: 1.05 }}
+      whileHover={{ y: -16, scale: 1.08 }}
       whileTap={{ scale: 0.95 }}
-      initial={{ opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      initial={{ opacity: 0, y: 30 }}
+      animate={{
+        opacity: 1,
+        y: isSelected ? -20 : 0,
+      }}
+      transition={{ delay: index * 0.04 }}
     >
       {!imgFailed ? (
         <div
@@ -37,6 +49,14 @@ export default function Card({ card, index, isSelected, onSelect }) {
         </div>
       ) : (
         <div className="card__art card__art--fallback" />
+      )}
+
+      {/* Color pip */}
+      {!card.college && (
+        <div
+          className="card__color-pip"
+          style={{ background: COLOR_PIPS[card.color] || COLOR_PIPS.colorless }}
+        />
       )}
 
       {card.college && <div className="card__college">{card.college}</div>}

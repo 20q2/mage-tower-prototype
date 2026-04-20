@@ -1,114 +1,207 @@
+/* Board: 3 columns x 6 rows of actual card-sized tiles */
 .board {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  max-width: 420px;
-  margin: 0 auto;
+  gap: 8px;
+  width: 100%;
+  max-width: min(480px, 55vh);
+  aspect-ratio: 3 / 7.5;
 }
 
+/* Row labels */
+.board__row-label {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+/* Individual tile — looks like a card on a table */
 .tile {
   position: relative;
-  aspect-ratio: 3 / 4;
-  border-radius: var(--radius-lg);
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  border: 3px solid transparent;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+
+  /* Card shadow — makes them feel like they're on a surface */
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.4),
+    0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .tile:hover {
-  transform: scale(1.03);
+  transform: translateY(-3px);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.5),
+    0 8px 16px rgba(0, 0, 0, 0.3);
 }
 
-.tile--white { border-color: var(--mtg-white); box-shadow: 0 0 12px rgba(245, 240, 224, 0.3); }
-.tile--blue { border-color: var(--mtg-blue); box-shadow: 0 0 12px rgba(59, 130, 246, 0.3); }
-.tile--black { border-color: var(--mtg-black); box-shadow: 0 0 12px rgba(26, 26, 46, 0.5); }
-.tile--red { border-color: var(--mtg-red); box-shadow: 0 0 12px rgba(239, 68, 68, 0.3); }
-.tile--green { border-color: var(--mtg-green); box-shadow: 0 0 12px rgba(34, 197, 94, 0.3); }
-.tile--colorless { border-color: var(--mtg-colorless); }
-.tile--gold { border-color: var(--mtg-gold); box-shadow: 0 0 12px rgba(212, 168, 67, 0.4); }
+/* Color borders — subtle glow from the card edge */
+.tile--white {
+  border-color: var(--mtg-white);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 12px rgba(245, 240, 224, 0.15);
+}
+.tile--blue {
+  border-color: var(--mtg-blue);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 12px rgba(59, 130, 246, 0.2);
+}
+.tile--black {
+  border-color: #2d2040;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.6), 0 0 12px rgba(80, 40, 100, 0.2);
+}
+.tile--red {
+  border-color: var(--mtg-red);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 12px rgba(239, 68, 68, 0.2);
+}
+.tile--green {
+  border-color: var(--mtg-green);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 12px rgba(34, 197, 94, 0.2);
+}
+.tile--colorless {
+  border-color: rgba(156, 163, 175, 0.3);
+}
+.tile--gold {
+  border-color: var(--mtg-gold);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 16px rgba(212, 168, 67, 0.3);
+}
 
+/* Card art fills the tile completely */
 .tile__art {
   position: absolute;
   inset: 0;
   background-size: cover;
   background-position: center;
-  filter: brightness(0.7);
 }
 
 .tile__art--fallback {
-  background: var(--bg-card);
+  background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-medium) 100%);
 }
 
+/* Effect label — sits at the bottom of the card */
 .tile__effect-label {
   position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 3px 0;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.6);
-  padding: 2px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
 
+/* Card name overlay */
+.tile__card-name {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 3px 4px;
+  font-size: 8px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+  background: linear-gradient(rgba(0, 0, 0, 0.7), transparent);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Goal row markers */
 .tile--goal-p1 {
-  border-color: var(--mtg-green);
-  box-shadow: inset 0 0 20px rgba(34, 197, 94, 0.2);
+  outline: 2px solid rgba(34, 197, 94, 0.4);
+  outline-offset: -2px;
 }
 
 .tile--goal-p2 {
-  border-color: #7c3aed;
-  box-shadow: inset 0 0 20px rgba(124, 58, 237, 0.2);
+  outline: 2px solid rgba(124, 58, 237, 0.4);
+  outline-offset: -2px;
 }
 
+/* Valid move highlight — pulsing gold glow */
 .tile--valid-move {
-  animation: pulse-highlight 1s infinite;
+  border-color: var(--accent-glow) !important;
+  animation: pulse-highlight 1.2s infinite ease-in-out;
 }
 
 @keyframes pulse-highlight {
-  0%, 100% { box-shadow: 0 0 8px rgba(245, 197, 66, 0.4); }
-  50% { box-shadow: 0 0 20px rgba(245, 197, 66, 0.8); }
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(245, 197, 66, 0.3), 0 2px 4px rgba(0,0,0,0.4);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(245, 197, 66, 0.7), 0 2px 4px rgba(0,0,0,0.4);
+  }
 }
 
-.tile--has-mascot {
-  animation: tile-pulse 2s infinite ease-in-out;
+/* Tile has mascot — subtle brighten */
+.tile--has-mascot .tile__art {
+  filter: brightness(0.5);
 }
 
-@keyframes tile-pulse {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.15); }
-}
-
+/* ===== MASCOT TOKEN ===== */
+/* Chunky poker-chip-style token sitting on the card */
 .mascot {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 48px;
-  height: 48px;
+  width: 70%;
+  aspect-ratio: 1;
+  max-width: 72px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 14px;
   font-weight: 900;
+  font-family: 'Cinzel', serif;
   z-index: 10;
+  /* Poker chip look */
   border: 3px solid;
+  box-shadow:
+    0 3px 6px rgba(0, 0, 0, 0.6),
+    0 6px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
 .mascot--p1 {
-  background: radial-gradient(circle, #4ade80, #16a34a);
+  background: radial-gradient(circle at 40% 35%, #6ee7a0, #16a34a 70%);
   border-color: #15803d;
   color: #052e16;
 }
 
 .mascot--p2 {
-  background: radial-gradient(circle, #a78bfa, #7c3aed);
+  background: radial-gradient(circle at 40% 35%, #c4b5fd, #7c3aed 70%);
   border-color: #6d28d9;
   color: #1e1b4b;
+}
+
+/* Goal zone labels */
+.board__goal-label {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 4px 0;
+  grid-column: 1 / -1;
+}
+
+.board__goal-label--p2 {
+  color: #a78bfa;
+}
+
+.board__goal-label--p1 {
+  color: #4ade80;
 }
