@@ -1,4 +1,4 @@
-export const ROWS = 6
+export const ROWS = 8
 export const COLS = 3
 export const CHAIN_CAP = 10
 export const ACTIONS_PER_TURN = 3
@@ -20,5 +20,5 @@ export const PHASES = {
   CHECK_WIN: 'checkWin',
 }
 
-export const P1_GOAL_ROW = 5
+export const P1_GOAL_ROW = 7
 export const P2_GOAL_ROW = 0

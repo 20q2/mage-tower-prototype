@@ -38,7 +38,7 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
 
   return {
     grid,
-    mascots: { p1: { row: 5, col: 1 }, p2: { row: 0, col: 1 } },
+    mascots: { p1: { row: ROWS - 1, col: 1 }, p2: { row: 0, col: 1 } },
     hands: { p1: p1Hand, p2: p2Hand },
     decks: { p1: p1Cards, p2: p2Cards },
     discard: [],

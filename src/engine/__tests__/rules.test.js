@@ -145,7 +145,7 @@ describe('checkWinCondition', () => {
   })
 
   it('p2 wins by reaching row 5', () => {
-    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 5, col: 1 } }, 'p2')).toBe('p2')
+    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 7, col: 1 } }, 'p2')).toBe('p2')
   })
 
   it('returns null when no winner', () => {
@@ -154,6 +154,6 @@ describe('checkWinCondition', () => {
 
   it('backwards compat: checks both without activePlayer', () => {
     expect(checkWinCondition({ p1: { row: 0, col: 1 }, p2: { row: 3, col: 1 } })).toBe('p1')
-    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 5, col: 1 } })).toBe('p2')
+    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 7, col: 1 } })).toBe('p2')
   })
 })

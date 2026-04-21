@@ -21,7 +21,7 @@ function emptyGrid() {
 function moveState(overrides = {}) {
   return {
     grid: emptyGrid(),
-    mascots: { p1: { row: 5, col: 1 }, p2: { row: 0, col: 1 } },
+    mascots: { p1: { row: 7, col: 1 }, p2: { row: 0, col: 1 } },
     hands: { p1: [], p2: [] },
     decks: { p1: [], p2: [] },
     discard: [],
@@ -46,12 +46,12 @@ function moveState(overrides = {}) {
 describe('RED terrain', () => {
   it('P1 steps onto red → pushed toward row 0', () => {
     const state = moveState()
-    state.grid[4][1] = makeTile('red')
-    const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
-    expect(next.mascots.p1).toEqual({ row: 3, col: 1 }) // Red pushed forward
+    state.grid[6][1] = makeTile('red')
+    const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
+    expect(next.mascots.p1).toEqual({ row: 5, col: 1 }) // Red pushed forward
   })
 
-  it('P2 steps onto red → pushed toward row 5', () => {
+  it('P2 steps onto red → pushed toward row 7', () => {
     const state = moveState({ activePlayer: 'p2' })
     state.grid[1][1] = makeTile('red')
     const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 1, col: 1 } })
@@ -60,10 +60,10 @@ describe('RED terrain', () => {
 
   it('chains through multiple reds', () => {
     const state = moveState()
-    state.grid[4][1] = makeTile('red')
-    state.grid[3][1] = makeTile('red')
-    const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
-    expect(next.mascots.p1).toEqual({ row: 2, col: 1 })
+    state.grid[6][1] = makeTile('red')
+    state.grid[5][1] = makeTile('red')
+    const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
+    expect(next.mascots.p1).toEqual({ row: 4, col: 1 })
   })
 
   it('red chain into goal row wins', () => {
@@ -87,7 +87,7 @@ describe('BLACK terrain', () => {
   })
 
   it('P2 steps onto black → pushed backward (toward row 0)', () => {
-    const state = moveState({ activePlayer: 'p2', mascots: { p1: { row: 5, col: 1 }, p2: { row: 2, col: 1 } } })
+    const state = moveState({ activePlayer: 'p2', mascots: { p1: { row: 7, col: 1 }, p2: { row: 2, col: 1 } } })
     state.grid[3][1] = makeTile('black')
     const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 3, col: 1 } })
     expect(next.mascots.p2).toEqual({ row: 2, col: 1 }) // Pushed back toward row 0
@@ -104,17 +104,17 @@ describe('GREEN terrain', () => {
 
   it('green blocks movement', () => {
     const grid = emptyGrid()
-    grid[4][1] = makeTile('green')
-    const moves = getValidMoves(grid, { row: 5, col: 1 }, 'p1')
-    expect(moves.find(m => m.row === 4 && m.col === 1)).toBeUndefined()
+    grid[6][1] = makeTile('green')
+    const moves = getValidMoves(grid, { row: 7, col: 1 }, 'p1')
+    expect(moves.find(m => m.row === 6 && m.col === 1)).toBeUndefined()
   })
 
   it('surrounded by green = no moves', () => {
     const grid = emptyGrid()
-    grid[4][1] = makeTile('green') // forward
-    grid[5][0] = makeTile('green') // left
-    grid[5][2] = makeTile('green') // right
-    const moves = getValidMoves(grid, { row: 5, col: 1 }, 'p1')
+    grid[6][1] = makeTile('green') // forward
+    grid[7][0] = makeTile('green') // left
+    grid[7][2] = makeTile('green') // right
+    const moves = getValidMoves(grid, { row: 7, col: 1 }, 'p1')
     expect(moves).toHaveLength(0)
   })
 })
@@ -132,7 +132,7 @@ describe('WHITE terrain', () => {
   })
 
   it('MOVE_MASCOT onto white sets pendingLateral', () => {
-    const state = moveState({ mascots: { p1: { row: 4, col: 1 }, p2: { row: 0, col: 1 } } })
+    const state = moveState({ mascots: { p1: { row: 6, col: 1 }, p2: { row: 0, col: 1 } } })
     state.grid[3][1] = makeTile('white')
     const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 3, col: 1 } })
     expect(next.pendingLateral).not.toBe(null)
@@ -224,29 +224,29 @@ describe('Prismari boost row', () => {
 describe('3-action system', () => {
   it('3 moves uses all actions', () => {
     const state = moveState()
+    state.grid[6][1] = { color: 'empty', card: null }
+    state.grid[5][1] = { color: 'empty', card: null }
     state.grid[4][1] = { color: 'empty', card: null }
-    state.grid[3][1] = { color: 'empty', card: null }
-    state.grid[2][1] = { color: 'empty', card: null }
 
-    let next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
+    let next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
     expect(next.actionsRemaining).toBe(2)
     expect(next.phase).toBe('act')
 
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 3, col: 1 } })
+    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 5, col: 1 } })
     expect(next.actionsRemaining).toBe(1)
 
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 2, col: 1 } })
+    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
     expect(next.actionsRemaining).toBe(0)
     expect(next.phase).toBe('checkWin')
-    expect(next.mascots.p1).toEqual({ row: 2, col: 1 })
+    expect(next.mascots.p1).toEqual({ row: 4, col: 1 })
   })
 
   it('chain still only costs 1 action', () => {
     const state = moveState()
-    state.grid[4][1] = makeTile('red')
-    const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
-    expect(next.mascots.p1).toEqual({ row: 3, col: 1 })
-    expect(next.actionsRemaining).toBe(2) // Chain didn't cost extra
+    state.grid[6][1] = makeTile('red')
+    const next = gameReducer(state, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
+    expect(next.mascots.p1).toEqual({ row: 5, col: 1 })
+    expect(next.actionsRemaining).toBe(2)
     expect(next.phase).toBe('act')
   })
 })
@@ -259,8 +259,8 @@ describe('Win condition', () => {
     expect(checkWinCondition({ p1: { row: 0, col: 1 }, p2: { row: 3, col: 1 } }, 'p1')).toBe('p1')
   })
 
-  it('P2 wins at row 5', () => {
-    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 5, col: 1 } }, 'p2')).toBe('p2')
+  it('P2 wins at row 7', () => {
+    expect(checkWinCondition({ p1: { row: 3, col: 1 }, p2: { row: 7, col: 1 } }, 'p2')).toBe('p2')
   })
 
   it('no winner mid-board', () => {
