@@ -4,7 +4,7 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  max-width: min(950px, 92vw);
+  max-width: min(1100px, 95vw);
   justify-content: center;
 }
 
@@ -31,12 +31,13 @@
   border-right: 2px solid rgba(34, 197, 94, 0.4);
 }
 
-/* Grid: 6 columns x 3 rows — landscape */
+/* Grid: 8 columns x 3 rows — landscape
+   Uses ROWS from constants (8) for columns in landscape view */
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  gap: 6px;
+  gap: 5px;
   flex: 1;
   max-height: calc(100vh - 200px);
 }
@@ -45,70 +46,68 @@
 .tile {
   position: relative;
   width: 100%;
-  aspect-ratio: 5 / 7;
-  border-radius: 6px;
+  aspect-ratio: 2 / 3;
+  border-radius: 5px;
   overflow: hidden;
   cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.06);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.4),
-    0 4px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .tile:hover {
-  transform: translateY(-3px);
-  box-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.5),
-    0 8px 16px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
   z-index: 5;
 }
 
-/* Color borders */
-.tile--white {
-  border-color: var(--mtg-white);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(245, 240, 224, 0.15);
-}
-.tile--blue {
-  border-color: var(--mtg-blue);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(59, 130, 246, 0.2);
-}
-.tile--black {
-  border-color: #2d2040;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.6), 0 0 10px rgba(80, 40, 100, 0.2);
-}
-.tile--red {
-  border-color: var(--mtg-red);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(239, 68, 68, 0.2);
-}
-.tile--green {
-  border-color: var(--mtg-green);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(34, 197, 94, 0.2);
-}
-.tile--colorless {
-  border-color: rgba(156, 163, 175, 0.3);
-}
+/* Color borders — only show on tiles that HAVE terrain */
+.tile--white { border-color: var(--mtg-white); box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 8px rgba(245, 240, 224, 0.12); }
+.tile--blue { border-color: var(--mtg-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 8px rgba(59, 130, 246, 0.15); }
+.tile--black { border-color: #2d2040; box-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 0 8px rgba(80, 40, 100, 0.15); }
+.tile--red { border-color: var(--mtg-red); box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 8px rgba(239, 68, 68, 0.15); }
+.tile--green { border-color: var(--mtg-green); box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 8px rgba(34, 197, 94, 0.15); }
+.tile--colorless { border-color: rgba(156, 163, 175, 0.2); }
+.tile--gold { border-color: var(--mtg-gold); box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(212, 168, 67, 0.2); }
+
+/* Empty tiles — very subtle, blend into the table */
 .tile--empty {
-  border-color: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+  background: rgba(0, 0, 0, 0.15);
 }
 .tile--empty .tile__art--fallback {
-  background: rgba(0, 0, 0, 0.2);
+  background: transparent;
+}
+.tile--empty:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  transform: none;
 }
 
-/* Middle row (col 1 in game coords = visual row 2) is darker to represent the center lane */
-.board-grid .tile:nth-child(3n+2) {
-  /* This won't work since grid is col-major... use a class instead */
+/* Goal rows — subtle edge highlight, only on non-empty tiles or always-subtle for empty */
+.tile--goal-p1:not(.tile--empty) {
+  outline: 2px solid rgba(34, 197, 94, 0.3);
+  outline-offset: -2px;
 }
-.tile--middle-lane {
-  filter: brightness(0.75);
+.tile--goal-p2:not(.tile--empty) {
+  outline: 2px solid rgba(124, 58, 237, 0.3);
+  outline-offset: -2px;
 }
-.tile--middle-lane:hover {
-  filter: brightness(0.85);
+/* Empty goal tiles get a very faint hint */
+.tile--goal-p1.tile--empty {
+  border-color: rgba(34, 197, 94, 0.1);
 }
-.tile--gold {
-  border-color: var(--mtg-gold);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 0 14px rgba(212, 168, 67, 0.3);
+.tile--goal-p2.tile--empty {
+  border-color: rgba(124, 58, 237, 0.1);
+}
+
+/* Middle lane — slightly darker */
+.tile--middle-lane:not(.tile--empty) {
+  filter: brightness(0.8);
+}
+.tile--middle-lane:not(.tile--empty):hover {
+  filter: brightness(0.9);
 }
 
 /* Card art fills the tile */
@@ -130,7 +129,7 @@
   left: 0;
   right: 0;
   padding: 2px 0;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -147,66 +146,47 @@
   left: 0;
   right: 0;
   padding: 2px 3px;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 600;
-  color: rgba(255,255,255,0.8);
-  background: linear-gradient(rgba(0, 0, 0, 0.7), transparent);
+  color: rgba(255,255,255,0.75);
+  background: linear-gradient(rgba(0, 0, 0, 0.65), transparent);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Goal row highlights */
-.tile--goal-p1 {
-  outline: 2px solid rgba(34, 197, 94, 0.35);
-  outline-offset: -2px;
-}
-
-.tile--goal-p2 {
-  outline: 2px solid rgba(124, 58, 237, 0.35);
-  outline-offset: -2px;
-}
-
-/* Valid move glow */
+/* Valid move glow — only shows during move phase */
 .tile--valid-move {
   border-color: var(--accent-glow) !important;
   animation: pulse-highlight 1.2s infinite ease-in-out;
 }
+/* Empty valid-move tiles get a subtler glow */
+.tile--valid-move.tile--empty {
+  background: rgba(245, 197, 66, 0.06);
+}
 
 @keyframes pulse-highlight {
-  0%, 100% {
-    box-shadow: 0 0 6px rgba(245, 197, 66, 0.3), 0 2px 4px rgba(0,0,0,0.4);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(245, 197, 66, 0.7), 0 2px 4px rgba(0,0,0,0.4);
-  }
+  0%, 100% { box-shadow: 0 0 6px rgba(245, 197, 66, 0.3); }
+  50% { box-shadow: 0 0 16px rgba(245, 197, 66, 0.6); }
 }
 
-/* Drag over — tile glows to indicate valid drop target */
+/* Drag over */
 .tile--drag-over {
   border-color: var(--accent-glow) !important;
-  box-shadow:
-    0 0 24px rgba(245, 197, 66, 0.6),
-    0 2px 8px rgba(0, 0, 0, 0.4),
-    inset 0 0 12px rgba(245, 197, 66, 0.15) !important;
-  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(245, 197, 66, 0.5), inset 0 0 10px rgba(245, 197, 66, 0.1) !important;
+  transform: scale(1.03);
 }
 
-/* Mascot on tile — dim the art behind it */
+/* Mascot on tile — dim the art */
 .tile--has-mascot .tile__art {
   filter: brightness(0.5);
 }
 
 /* ===== MASCOT TOKEN ===== */
 .mascot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 60%;
-  aspect-ratio: 1;
-  max-width: 64px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -214,7 +194,6 @@
   font-size: 13px;
   font-weight: 900;
   font-family: 'Cinzel', serif;
-  z-index: 10;
   border: 3px solid;
   box-shadow:
     0 3px 6px rgba(0, 0, 0, 0.6),
