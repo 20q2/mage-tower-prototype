@@ -49,14 +49,11 @@ describe('resolveTile', () => {
     expect(result.chain).toBe(true)
   })
 
-  it('white tile returns lateral options', () => {
+  it('white tile gives bonus move', () => {
     const grid = makeGrid()
     grid[3][1] = makeTile('white')
     const result = resolveTile(grid, { row: 3, col: 1 }, 'p1', null)
-    expect(result.lateralOptions).toEqual([
-      { row: 3, col: 0 },
-      { row: 3, col: 2 },
-    ])
+    expect(result.whiteBonus).toBe(true)
     expect(result.chain).toBe(false)
   })
 
@@ -67,11 +64,12 @@ describe('resolveTile', () => {
     expect(result.chain).toBe(false)
   })
 
-  it('blue tile has no tile effect', () => {
+  it('blue tile draws on entry', () => {
     const grid = makeGrid()
     grid[3][1] = makeTile('blue')
     const result = resolveTile(grid, { row: 3, col: 1 }, 'p1', null)
     expect(result.newPos).toEqual({ row: 3, col: 1 })
+    expect(result.draw).toBe(true)
     expect(result.chain).toBe(false)
   })
 

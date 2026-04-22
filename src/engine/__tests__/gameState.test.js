@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createInitialState, gameReducer } from '../gameState'
-import { PHASES, ACTIONS_PER_TURN } from '../constants'
+import { PHASES } from '../constants'
 
 describe('createInitialState', () => {
   it('creates an 8x3 empty grid', () => {
@@ -10,112 +10,127 @@ describe('createInitialState', () => {
     for (const row of state.grid) for (const tile of row) expect(tile.color).toBe('empty')
   })
 
-  it('mascots start at their own goal rows', () => {
+  it('mascots at their goal rows', () => {
     const state = createInitialState('lorehold', 'witherbloom')
     expect(state.mascots.p1).toEqual({ row: 7, col: 1 })
     expect(state.mascots.p2).toEqual({ row: 0, col: 1 })
   })
 
-  it('deals 3 cards to each player', () => {
+  it('deals 3 cards each', () => {
     const state = createInitialState('lorehold', 'witherbloom')
     expect(state.hands.p1).toHaveLength(3)
     expect(state.hands.p2).toHaveLength(3)
   })
-
-  it('starts on draw phase', () => {
-    const state = createInitialState('lorehold', 'witherbloom')
-    expect(state.phase).toBe('draw')
-    expect(state.activePlayer).toBe('p1')
-  })
 })
 
-describe('gameReducer — 3-action system', () => {
+describe('gameReducer — alternating play + simultaneous move', () => {
   let state
   beforeEach(() => { state = createInitialState('lorehold', 'witherbloom') })
 
-  it('DRAW_CARD → act phase with 3 actions', () => {
-    const next = gameReducer(state, { type: 'DRAW_CARD' })
-    expect(next.phase).toBe('act')
-    expect(next.actionsRemaining).toBe(ACTIONS_PER_TURN)
+  it('DRAW_CARDS: both draw, enters play phase', () => {
+    const next = gameReducer(state, { type: 'DRAW_CARDS' })
+    expect(next.phase).toBe('play')
+    expect(next.hands.p1).toHaveLength(4)
+    expect(next.hands.p2).toHaveLength(4)
+    expect(next.playTurn).toBe('p1')
   })
 
-  it('PLAY_CARD costs 1 action', () => {
-    let next = gameReducer(state, { type: 'DRAW_CARD' })
+  it('PLAY_CARD: places card, switches playTurn', () => {
+    let next = gameReducer(state, { type: 'DRAW_CARDS' })
     const card = next.hands.p1[0]
-    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 3, col: 1 } })
-    expect(next.actionsRemaining).toBe(ACTIONS_PER_TURN - 1)
-    expect(next.grid[3][1].card.name).toBe(card.name)
-    expect(next.phase).toBe('act') // Still acting
+    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 4, col: 1 } })
+    expect(next.grid[4][1].card.name).toBe(card.name)
+    expect(next.playTurn).toBe('p2') // Opponent's turn to play/pass
   })
 
-  it('MOVE_MASCOT costs 1 action', () => {
-    let next = { ...state, phase: 'act', actionsRemaining: 3, activePlayer: 'p1' }
-    next.grid[6][1] = { color: 'empty', card: null }
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
+  it('PASS: ends play phase, enters move', () => {
+    let next = gameReducer(state, { type: 'DRAW_CARDS' })
+    next = gameReducer(next, { type: 'PASS' })
+    expect(next.phase).toBe('move')
+  })
+
+  it('alternating plays: P1 plays, P2 plays, P1 passes', () => {
+    let next = gameReducer(state, { type: 'DRAW_CARDS' })
+    // P1 plays
+    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 5, col: 1 } })
+    expect(next.playTurn).toBe('p2')
+    // P2 plays
+    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 2, col: 1 } })
+    expect(next.playTurn).toBe('p1')
+    // P1 passes → move phase
+    next = gameReducer(next, { type: 'PASS' })
+    expect(next.phase).toBe('move')
+  })
+
+  it('SUBMIT_MOVE: collects both, then resolves', () => {
+    let next = { ...state, phase: 'move', pendingMoves: { p1: null, p2: null }, pendingWhiteBonus: { p1: false, p2: false } }
+    next = gameReducer(next, { type: 'SUBMIT_MOVE', payload: { player: 'p1', row: 6, col: 1 } })
+    expect(next.pendingMoves.p1).toEqual({ row: 6, col: 1 })
+    expect(next.phase).toBe('move') // Waiting for P2
+
+    next = gameReducer(next, { type: 'SUBMIT_MOVE', payload: { player: 'p2', row: 1, col: 1 } })
+    expect(next.phase).toBe('resolve') // Both in
+  })
+
+  it('RESOLVE_MOVES: both mascots move', () => {
+    let next = {
+      ...state, phase: 'resolve',
+      pendingMoves: { p1: { row: 6, col: 1 }, p2: { row: 1, col: 1 } },
+      pendingWhiteBonus: { p1: false, p2: false },
+    }
+    next = gameReducer(next, { type: 'RESOLVE_MOVES' })
     expect(next.mascots.p1).toEqual({ row: 6, col: 1 })
-    expect(next.actionsRemaining).toBe(2)
-    expect(next.phase).toBe('act')
-  })
-
-  it('spending all 3 actions ends turn', () => {
-    let next = { ...state, phase: 'act', actionsRemaining: 1, activePlayer: 'p1' }
-    next.grid[6][1] = { color: 'empty', card: null }
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
-    expect(next.actionsRemaining).toBe(0)
+    expect(next.mascots.p2).toEqual({ row: 1, col: 1 })
     expect(next.phase).toBe('checkWin')
   })
 
-  it('can mix cards and moves: 2 cards + 1 move', () => {
-    let next = gameReducer(state, { type: 'DRAW_CARD' })
-    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 3, col: 0 } })
-    expect(next.actionsRemaining).toBe(2)
-    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 3, col: 2 } })
-    expect(next.actionsRemaining).toBe(1)
-    next.grid[6][1] = { color: 'empty', card: null }
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
-    expect(next.actionsRemaining).toBe(0)
-    expect(next.phase).toBe('checkWin')
-  })
-
-  it('can do 3 moves', () => {
-    let next = { ...state, phase: 'act', actionsRemaining: 3, activePlayer: 'p1' }
-    next.grid[6][1] = { color: 'empty', card: null }
-    next.grid[5][1] = { color: 'empty', card: null }
-    next.grid[4][1] = { color: 'empty', card: null }
-
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
-    expect(next.actionsRemaining).toBe(2)
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 5, col: 1 } })
-    expect(next.actionsRemaining).toBe(1)
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 4, col: 1 } })
-    expect(next.actionsRemaining).toBe(0)
-    expect(next.mascots.p1).toEqual({ row: 4, col: 1 })
-  })
-
-  it('END_TURN switches player', () => {
+  it('END_TURN: switches active player', () => {
     let next = { ...state, phase: 'checkWin', activePlayer: 'p1' }
     next = gameReducer(next, { type: 'END_TURN' })
     expect(next.activePlayer).toBe('p2')
     expect(next.phase).toBe('draw')
   })
 
-  it('P1 wins at row 0', () => {
-    let next = {
-      ...state, phase: 'act', actionsRemaining: 1, activePlayer: 'p1',
-      mascots: { p1: { row: 1, col: 1 }, p2: { row: 4, col: 1 } },
+  it('red chain through RESOLVE_MOVES', () => {
+    let next = { ...state, phase: 'resolve',
+      pendingMoves: { p1: { row: 6, col: 1 }, p2: { row: 1, col: 1 } },
+      pendingWhiteBonus: { p1: false, p2: false },
     }
-    next.grid[0][1] = { color: 'empty', card: null }
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 0, col: 1 } })
-    expect(next.winner).toBe('p1')
+    next.grid[6][1] = { color: 'red', card: { name: 'Mountain', color: 'red', scryfallName: 'Mountain', displayName: 'Mountain' } }
+    next = gameReducer(next, { type: 'RESOLVE_MOVES' })
+    expect(next.mascots.p1).toEqual({ row: 5, col: 1 }) // Pushed forward by red
   })
 
-  it('stepping onto blue tile draws a card immediately', () => {
-    let next = { ...state, phase: 'act', actionsRemaining: 3, activePlayer: 'p1' }
-    next.grid[6][1] = { color: 'blue', card: { name: 'Island', color: 'blue', scryfallName: 'Island', displayName: 'Island' } }
-    const handBefore = next.hands.p1.length
-    const deckBefore = next.decks.p1.length
-    next = gameReducer(next, { type: 'MOVE_MASCOT', payload: { row: 6, col: 1 } })
-    expect(next.hands.p1.length).toBe(handBefore + 1)
-    expect(next.decks.p1.length).toBe(deckBefore - 1)
+  it('white tile sets pendingWhiteBonus', () => {
+    let next = { ...state, phase: 'resolve',
+      pendingMoves: { p1: { row: 6, col: 1 }, p2: { row: 1, col: 1 } },
+      pendingWhiteBonus: { p1: false, p2: false },
+    }
+    next.grid[6][1] = { color: 'white', card: { name: 'Plains', color: 'white', scryfallName: 'Plains', displayName: 'Plains' } }
+    next = gameReducer(next, { type: 'RESOLVE_MOVES' })
+    expect(next.pendingWhiteBonus.p1).toBe(true)
+    expect(next.phase).toBe('move') // Back to move for bonus
+  })
+
+  it('WHITE_BONUS_MOVE moves mascot', () => {
+    let next = {
+      ...state, phase: 'move',
+      mascots: { p1: { row: 6, col: 1 }, p2: { row: 1, col: 1 } },
+      pendingWhiteBonus: { p1: true, p2: false },
+    }
+    next = gameReducer(next, { type: 'WHITE_BONUS_MOVE', payload: { player: 'p1', row: 5, col: 1 } })
+    expect(next.mascots.p1).toEqual({ row: 5, col: 1 })
+    expect(next.pendingWhiteBonus.p1).toBe(false)
+    expect(next.phase).toBe('checkWin')
+  })
+
+  it('P1 wins at row 0', () => {
+    let next = { ...state, phase: 'resolve',
+      mascots: { p1: { row: 1, col: 1 }, p2: { row: 5, col: 1 } },
+      pendingMoves: { p1: { row: 0, col: 1 }, p2: { row: 6, col: 1 } },
+      pendingWhiteBonus: { p1: false, p2: false },
+    }
+    next = gameReducer(next, { type: 'RESOLVE_MOVES' })
+    expect(next.winner).toBe('p1')
   })
 })
