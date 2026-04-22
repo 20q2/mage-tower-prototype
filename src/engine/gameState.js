@@ -103,11 +103,11 @@ export function gameReducer(state, action) {
       let tileColor, tileCard, logMsg
       if (card.college && playMode === 'color1') {
         tileColor = card.collegeColors[0]
-        tileCard = { ...card, displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
+        tileCard = { name: card.name, color: tileColor, scryfallName: COLOR_TO_LAND[tileColor] || 'Wastes', displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
         logMsg = `${player} plays ${card.name} as ${tileColor} at (${row},${col}).`
       } else if (card.college && playMode === 'color2') {
         tileColor = card.collegeColors[1]
-        tileCard = { ...card, displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
+        tileCard = { name: card.name, color: tileColor, scryfallName: COLOR_TO_LAND[tileColor] || 'Wastes', displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
         logMsg = `${player} plays ${card.name} as ${tileColor} at (${row},${col}).`
       } else if (card.college) {
         tileColor = card.color
