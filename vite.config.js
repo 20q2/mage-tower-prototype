@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  base: '/mage-tower-prototype/',
   server: {
     port: 5433,
   },

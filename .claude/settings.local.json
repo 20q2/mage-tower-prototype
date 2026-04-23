@@ -6,7 +6,9 @@
       "Bash(npx vitest:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(gh api:*)",
+      "Bash(where gh:*)"
     ]
   }
 }
