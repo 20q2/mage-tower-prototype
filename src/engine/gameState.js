@@ -36,17 +36,19 @@ export function createInitialState(p1DeckKey, p2DeckKey, mascotChoices = {}) {
   const p1Hand = p1Cards.splice(0, 3)
   const p2Hand = p2Cards.splice(0, 3)
 
-  // Place face-down cards in center rows (3 and 4)
-  // P2's 3 cards fill row 3, P1's 3 cards fill row 4
-  const p2FaceDown = p1Cards.splice(0, 3)
-  const p1FaceDown = p2Cards.splice(0, 3)
+  // Place face-down cards in center column (col 1), all 8 rows
+  // P1's 4 cards fill rows 4-7 center, P2's 4 cards fill rows 0-3 center
+  const p2FaceDown = p2Cards.splice(0, 4)
+  const p1FaceDown = p1Cards.splice(0, 4)
 
-  for (let col = 0; col < COLS; col++) {
-    if (p2FaceDown[col]) {
-      grid[3][col] = { color: 'facedown', card: p2FaceDown[col], faceDown: true, stack: [] }
+  for (let row = 0; row < 4; row++) {
+    if (p2FaceDown[row]) {
+      grid[row][1] = { color: 'facedown', card: p2FaceDown[row], faceDown: true, stack: [] }
     }
-    if (p1FaceDown[col]) {
-      grid[4][col] = { color: 'facedown', card: p1FaceDown[col], faceDown: true, stack: [] }
+  }
+  for (let row = 4; row < ROWS; row++) {
+    if (p1FaceDown[row - 4]) {
+      grid[row][1] = { color: 'facedown', card: p1FaceDown[row - 4], faceDown: true, stack: [] }
     }
   }
 

@@ -3,20 +3,18 @@ import { createInitialState, gameReducer } from '../gameState'
 import { PHASES } from '../constants'
 
 describe('createInitialState', () => {
-  it('creates an 8x3 grid with face-down cards in center rows', () => {
+  it('creates an 8x3 grid with face-down cards in center column', () => {
     const state = createInitialState('lorehold', 'witherbloom')
     expect(state.grid).toHaveLength(8)
     expect(state.grid[0]).toHaveLength(3)
-    // Rows 3 and 4 should have face-down cards
-    for (let col = 0; col < 3; col++) {
-      expect(state.grid[3][col].faceDown).toBe(true)
-      expect(state.grid[4][col].faceDown).toBe(true)
+    // Center column (col 1) should have 8 face-down cards
+    for (let row = 0; row < 8; row++) {
+      expect(state.grid[row][1].faceDown).toBe(true)
     }
-    // Other rows should be empty
-    for (const row of [0, 1, 2, 5, 6, 7]) {
-      for (const tile of state.grid[row]) {
-        expect(tile.color).toBe('empty')
-      }
+    // Side columns should be empty
+    for (let row = 0; row < 8; row++) {
+      expect(state.grid[row][0].color).toBe('empty')
+      expect(state.grid[row][2].color).toBe('empty')
     }
   })
 
@@ -76,13 +74,13 @@ describe('gameReducer — alternating play + simultaneous move', () => {
 
   it('PLAY_CARD: stacking — old card goes underneath', () => {
     let next = gameReducer(state, { type: 'DRAW_CARDS' })
-    // Place first card
-    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 5, col: 1 } })
-    const firstCard = next.grid[5][1].card
+    // Place first card on empty side tile
+    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 5, col: 0 } })
+    const firstCard = next.grid[5][0].card
     // P2 places on same tile
-    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 5, col: 1 } })
-    expect(next.grid[5][1].stack).toHaveLength(1)
-    expect(next.grid[5][1].stack[0].name).toBe(firstCard.name)
+    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 5, col: 0 } })
+    expect(next.grid[5][0].stack).toHaveLength(1)
+    expect(next.grid[5][0].stack[0].name).toBe(firstCard.name)
   })
 
   it('PASS: ends play phase, enters move', () => {
