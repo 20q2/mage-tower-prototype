@@ -24,16 +24,31 @@ export const COLOR_TO_LAND = {
   colorless: 'Wastes',
 }
 
-export function createInitialState(p1DeckKey, p2DeckKey) {
+export function createInitialState(p1DeckKey, p2DeckKey, mascotChoices = {}) {
   const p1Cards = shuffleArray(DECKS[p1DeckKey].cards.map(addId))
   const p2Cards = shuffleArray(DECKS[p2DeckKey].cards.map(addId))
 
   const grid = Array.from({ length: ROWS }, () =>
-    Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
+    Array.from({ length: COLS }, () => ({ color: 'empty', card: null, stack: [] }))
   )
 
+  // Deal starting hands (3 each)
   const p1Hand = p1Cards.splice(0, 3)
   const p2Hand = p2Cards.splice(0, 3)
+
+  // Place face-down cards in center rows (3 and 4)
+  // P2's 3 cards fill row 3, P1's 3 cards fill row 4
+  const p2FaceDown = p1Cards.splice(0, 3)
+  const p1FaceDown = p2Cards.splice(0, 3)
+
+  for (let col = 0; col < COLS; col++) {
+    if (p2FaceDown[col]) {
+      grid[3][col] = { color: 'facedown', card: p2FaceDown[col], faceDown: true, stack: [] }
+    }
+    if (p1FaceDown[col]) {
+      grid[4][col] = { color: 'facedown', card: p1FaceDown[col], faceDown: true, stack: [] }
+    }
+  }
 
   return {
     grid,
@@ -42,18 +57,19 @@ export function createInitialState(p1DeckKey, p2DeckKey) {
     decks: { p1: p1Cards, p2: p2Cards },
     discard: [],
     phase: PHASES.DRAW,
-    activePlayer: 'p1',         // Who starts the play phase
-    playTurn: null,              // Whose turn it is to play/pass within the play phase
+    activePlayer: 'p1',
+    playTurn: null,
     turnCount: 1,
     winner: null,
-    // Simultaneous move collection
     pendingMoves: { p1: null, p2: null },
-    // White tile bonus moves
     pendingWhiteBonus: { p1: false, p2: false },
-    // College state
-    portalLinks: [],
     silverquillImmunity: null,
-    prismariBoostRow: null,
+    // Mascot abilities
+    mascotAbilities: {
+      p1: mascotChoices.p1 || null,
+      p2: mascotChoices.p2 || null,
+    },
+    abilityUsed: { p1: false, p2: false },
     log: ['Game started!'],
   }
 }
@@ -83,7 +99,7 @@ export function gameReducer(state, action) {
         hands,
         decks,
         phase: PHASES.PLAY,
-        playTurn: state.activePlayer,  // Active player starts the play phase
+        playTurn: state.activePlayer,
         log: logEntries,
       }
     }
@@ -96,38 +112,34 @@ export function gameReducer(state, action) {
       const card = hand[cardIndex]
       hand.splice(cardIndex, 1)
 
-      const grid = state.grid.map(r => r.map(t => ({ ...t })))
-      const oldTileCard = grid[row][col].card
-      const discard = oldTileCard ? [...state.discard, oldTileCard] : [...state.discard]
+      const grid = state.grid.map(r => r.map(t => ({ ...t, stack: [...(t.stack || [])] })))
+      const oldTile = grid[row][col]
+
+      // Card stacking: old card goes underneath into the stack
+      let newStack = [...(oldTile.stack || [])]
+      if (oldTile.card) {
+        newStack = [oldTile.card, ...newStack]
+      }
 
       let tileColor, tileCard, logMsg
-      if (card.college && playMode === 'color1') {
-        tileColor = card.collegeColors[0]
+      if (card.college && (playMode === 'color1' || playMode === 'color2')) {
+        const colorIdx = playMode === 'color1' ? 0 : 1
+        tileColor = card.collegeColors[colorIdx]
         tileCard = { name: card.name, color: tileColor, scryfallName: COLOR_TO_LAND[tileColor] || 'Wastes', displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
         logMsg = `${player} plays ${card.name} as ${tileColor} at (${row},${col}).`
-      } else if (card.college && playMode === 'color2') {
-        tileColor = card.collegeColors[1]
-        tileCard = { name: card.name, color: tileColor, scryfallName: COLOR_TO_LAND[tileColor] || 'Wastes', displayName: COLOR_TO_LAND[tileColor] || 'Wastes' }
-        logMsg = `${player} plays ${card.name} as ${tileColor} at (${row},${col}).`
-      } else if (card.college) {
-        tileColor = card.color
-        tileCard = card
-        logMsg = `${player} plays ${card.name} (${card.college}) at (${row},${col}).`
       } else {
         tileColor = card.color
         tileCard = { ...card, displayName: COLOR_TO_LAND[card.color] || 'Wastes' }
         logMsg = `${player} plays ${card.name} at (${row},${col}).`
       }
-      grid[row][col] = { color: tileColor, card: tileCard }
+      grid[row][col] = { color: tileColor, card: tileCard, stack: newStack }
 
-      // After playing, turn passes to the other player
       const otherPlayer = player === 'p1' ? 'p2' : 'p1'
 
       return {
         ...state,
         grid,
         hands: { ...state.hands, [player]: hand },
-        discard,
         playTurn: otherPlayer,
         log: [...state.log, logMsg],
       }
@@ -142,6 +154,104 @@ export function gameReducer(state, action) {
         pendingMoves: { p1: null, p2: null },
         pendingWhiteBonus: { p1: false, p2: false },
         log: [...state.log, `${state.playTurn} passes. Movement phase!`],
+      }
+    }
+
+    // === USE_ABILITY: player activates their mascot ability ===
+    case 'USE_ABILITY': {
+      const { player, params } = action.payload
+      const ability = state.mascotAbilities[player]
+      if (!ability || state.abilityUsed[player]) return state
+
+      const grid = state.grid.map(r => r.map(t => ({ ...t, stack: [...(t.stack || [])] })))
+      const logEntries = [...state.log]
+      const mascotPos = state.mascots[player]
+      let newState = { ...state }
+
+      switch (ability) {
+        case 'witherbloom': {
+          // Clear all tiles in 3x3 around mascot
+          for (let r = mascotPos.row - 1; r <= mascotPos.row + 1; r++) {
+            for (let c = mascotPos.col - 1; c <= mascotPos.col + 1; c++) {
+              if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                grid[r][c] = { color: 'empty', card: null, stack: [] }
+              }
+            }
+          }
+          logEntries.push(`${player} uses Witherbloom — Wither and Bloom! 3x3 area cleared.`)
+          newState = { ...state, grid, log: logEntries }
+          break
+        }
+        case 'prismari': {
+          // Move mascot 1 space left or right (no tile effect)
+          const { direction } = params // 'left' or 'right'
+          const newCol = mascotPos.col + (direction === 'left' ? -1 : 1)
+          if (newCol >= 0 && newCol < COLS) {
+            const newMascots = { ...state.mascots, [player]: { row: mascotPos.row, col: newCol } }
+            logEntries.push(`${player} uses Prismari — Kinetic Jaunt! Shifts ${direction}.`)
+            newState = { ...state, mascots: newMascots, log: logEntries }
+          } else {
+            return state // Can't move off-board
+          }
+          break
+        }
+        case 'lorehold': {
+          // In 3x3 around mascot: peel top stacked card, flip face-down cards
+          for (let r = mascotPos.row - 1; r <= mascotPos.row + 1; r++) {
+            for (let c = mascotPos.col - 1; c <= mascotPos.col + 1; c++) {
+              if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                const tile = grid[r][c]
+                // Flip face-down cards
+                if (tile.faceDown && tile.card) {
+                  const revealedCard = tile.card
+                  grid[r][c] = { color: revealedCard.color, card: revealedCard, stack: [...(tile.stack || [])], faceDown: false }
+                  logEntries.push(`  Flipped face-down card at (${r},${c}): ${revealedCard.name}`)
+                }
+                // Peel top card off stacked tiles (reveal card underneath)
+                else if (tile.stack && tile.stack.length > 0) {
+                  const buried = [...tile.stack]
+                  const revealed = buried.shift()
+                  grid[r][c] = { color: revealed.color, card: revealed, stack: buried }
+                  logEntries.push(`  Peeled card at (${r},${c}), revealed: ${revealed.name}`)
+                }
+              }
+            }
+          }
+          logEntries.push(`${player} uses Lorehold — Shared Memories!`)
+          newState = { ...state, grid, log: logEntries }
+          break
+        }
+        case 'quandrix': {
+          // Swap positions of 2 tiles within 3x3 around mascot
+          const { tile1, tile2 } = params // { row, col } each
+          const inRange = (pos) => {
+            return Math.abs(pos.row - mascotPos.row) <= 1 && Math.abs(pos.col - mascotPos.col) <= 1 &&
+              pos.row >= 0 && pos.row < ROWS && pos.col >= 0 && pos.col < COLS
+          }
+          if (inRange(tile1) && inRange(tile2)) {
+            const temp = { ...grid[tile1.row][tile1.col] }
+            grid[tile1.row][tile1.col] = { ...grid[tile2.row][tile2.col] }
+            grid[tile2.row][tile2.col] = temp
+            logEntries.push(`${player} uses Quandrix — Vortex Warp! Swapped (${tile1.row},${tile1.col}) and (${tile2.row},${tile2.col}).`)
+            newState = { ...state, grid, log: logEntries }
+          } else {
+            return state
+          }
+          break
+        }
+        case 'silverquill': {
+          // Ignore all tile effects this movement phase
+          logEntries.push(`${player} uses Silverquill — Silvery Barbs! Immune to tile effects.`)
+          newState = { ...state, silverquillImmunity: player, log: logEntries }
+          break
+        }
+        default:
+          return state
+      }
+
+      return {
+        ...newState,
+        abilityUsed: { ...state.abilityUsed, [player]: true },
       }
     }
 
@@ -174,8 +284,7 @@ export function gameReducer(state, action) {
         if (!move) continue
 
         const chain = resolveChain(
-          state.grid, move, player, state.silverquillImmunity,
-          { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
+          state.grid, move, player, state.silverquillImmunity
         )
         newMascots[player] = chain.finalPos
 
@@ -230,8 +339,7 @@ export function gameReducer(state, action) {
       const newMascots = { ...state.mascots, [player]: { row, col } }
 
       const chain = resolveChain(
-        state.grid, { row, col }, player, state.silverquillImmunity,
-        { portalLinks: state.portalLinks, prismariBoostRow: state.prismariBoostRow }
+        state.grid, { row, col }, player, state.silverquillImmunity
       )
       newMascots[player] = chain.finalPos
 
@@ -282,25 +390,19 @@ export function gameReducer(state, action) {
     // === END_TURN: alternate active player ===
     case 'END_TURN': {
       const nextPlayer = state.activePlayer === 'p1' ? 'p2' : 'p1'
-      const silverquillImmunity =
-        state.silverquillImmunity === state.activePlayer ? null : state.silverquillImmunity
 
       return {
         ...state,
         activePlayer: nextPlayer,
         phase: PHASES.DRAW,
         turnCount: state.turnCount + 1,
-        silverquillImmunity,
+        silverquillImmunity: null, // Reset each turn
+        abilityUsed: { p1: false, p2: false }, // Reset abilities each round
         pendingMoves: { p1: null, p2: null },
         pendingWhiteBonus: { p1: false, p2: false },
         playTurn: null,
         log: [...state.log, `--- Turn ${state.turnCount + 1} ---`],
       }
-    }
-
-    case 'ACTIVATE_COLLEGE': {
-      const { college, params, player } = action.payload
-      return applyCollegeReducer(state, college, params, player || state.playTurn)
     }
 
     default:
@@ -316,51 +418,5 @@ function tileEffectName(color) {
     case 'green': return 'Green — wall'
     case 'blue': return 'Blue — draw'
     default: return color
-  }
-}
-
-function applyCollegeReducer(state, college, params, activePlayer) {
-  const grid = state.grid.map(r => r.map(t => ({ ...t })))
-  const log = [...state.log]
-
-  switch (college) {
-    case 'witherbloom': {
-      const { centerRow, centerCol, wallRow, wallCol } = params
-      for (let r = centerRow - 1; r <= centerRow + 1; r++) {
-        for (let c = centerCol - 1; c <= centerCol + 1; c++) {
-          if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-            grid[r][c] = { color: 'colorless', card: { name: 'Destroyed', color: 'colorless', scryfallName: 'Wastes' } }
-          }
-        }
-      }
-      if (wallRow >= 0 && wallRow < ROWS && wallCol >= 0 && wallCol < COLS) {
-        grid[wallRow][wallCol] = { color: 'green', card: { name: 'Witherbloom Wall', color: 'green', scryfallName: 'Forest' } }
-      }
-      log.push(`Witherbloom NUKE! 3x3 destroyed.`)
-      return { ...state, grid, log }
-    }
-    case 'silverquill': {
-      log.push(`${activePlayer}'s mascot gains immunity!`)
-      return { ...state, silverquillImmunity: activePlayer, log }
-    }
-    case 'lorehold': {
-      const { discardIndex, row, col } = params
-      const discard = [...state.discard]
-      const card = discard.splice(discardIndex, 1)[0]
-      if (card) { grid[row][col] = { color: card.color, card }; log.push(`Lorehold recalls ${card.name}.`) }
-      return { ...state, grid, discard, log }
-    }
-    case 'quandrix': {
-      const blueTiles = []
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c].color === 'blue') blueTiles.push({ row: r, col: c })
-      log.push(`Quandrix links ${blueTiles.length} blue portals!`)
-      return { ...state, portalLinks: blueTiles, log }
-    }
-    case 'prismari': {
-      const { row } = params
-      log.push(`Prismari doubles movement in row ${row}!`)
-      return { ...state, prismariBoostRow: row, log }
-    }
-    default: return state
   }
 }

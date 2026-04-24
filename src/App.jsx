@@ -17,6 +17,7 @@ export default function App() {
         p1Deck={gameConfig.p1Deck}
         p2Deck={gameConfig.p2Deck}
         mode={gameConfig.mode}
+        mascots={gameConfig.mascots}
         onExit={() => setGameConfig(null)}
       />
     </AnimatePresence>

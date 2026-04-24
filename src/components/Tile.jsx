@@ -11,35 +11,36 @@ const EFFECT_LABELS = {
   blue: 'Draw 1',
   colorless: '',
   empty: '',
+  facedown: '',
 }
 
 const Tile = forwardRef(function Tile({ tile, row, col, onTileClick, onDrop, isValidMove, isMiddleLane, canDrop, hasMascot }, ref) {
   const [imgFailed, setImgFailed] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
-  const isEmpty = tile.color === 'empty' || !tile.card
-  const isCollege = tile.card?.college
+  const isFaceDown = tile.faceDown
+  const isEmpty = !isFaceDown && (tile.color === 'empty' || !tile.card)
   const isGoalP1 = row === P1_GOAL_ROW
   const isGoalP2 = row === P2_GOAL_ROW
+  const stackSize = tile.stack ? tile.stack.length : 0
 
-  const artName = isCollege
-    ? tile.card.scryfallName
-    : tile.card?.displayName || tile.card?.scryfallName || null
-  const imageUrl = artName ? getScryfallImageUrl(artName) : null
+  let artName = null
+  let imageUrl = null
+  let colorClass = 'empty'
+  let effectLabel = ''
+  let displayName = ''
 
-  const colorClass = isEmpty ? 'empty' : (isCollege ? 'gold' : tile.color)
-
-  const effectLabel = isEmpty
-    ? ''
-    : isCollege
-      ? tile.card.college.charAt(0).toUpperCase() + tile.card.college.slice(1)
-      : EFFECT_LABELS[tile.color]
-
-  const displayName = isEmpty
-    ? ''
-    : isCollege
-      ? tile.card.name
-      : tile.card?.displayName || ''
+  if (isFaceDown) {
+    colorClass = 'facedown'
+    effectLabel = ''
+    displayName = 'Face Down'
+  } else if (!isEmpty) {
+    artName = tile.card?.displayName || tile.card?.scryfallName || null
+    imageUrl = artName ? getScryfallImageUrl(artName) : null
+    colorClass = tile.color
+    effectLabel = EFFECT_LABELS[tile.color] || ''
+    displayName = tile.card?.displayName || ''
+  }
 
   function handleDragOver(e) {
     if (!canDrop) return
@@ -84,7 +85,9 @@ const Tile = forwardRef(function Tile({ tile, row, col, onTileClick, onDrop, isV
       whileHover={isEmpty && !dragOver ? {} : { y: -3, scale: 1.03 }}
       whileTap={isEmpty ? {} : { scale: 0.97 }}
     >
-      {imageUrl && !imgFailed ? (
+      {isFaceDown ? (
+        <div className="tile__art tile__art--facedown" />
+      ) : imageUrl && !imgFailed ? (
         <div
           className="tile__art"
           style={{ backgroundImage: `url(${imageUrl})` }}
@@ -102,6 +105,9 @@ const Tile = forwardRef(function Tile({ tile, row, col, onTileClick, onDrop, isV
 
       {displayName && <div className="tile__card-name">{displayName}</div>}
       {effectLabel && <div className="tile__effect-label">{effectLabel}</div>}
+      {stackSize > 0 && (
+        <div className="tile__stack-badge">{stackSize}</div>
+      )}
     </motion.div>
   )
 })

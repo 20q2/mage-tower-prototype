@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { chooseCardPlay, chooseMove } from '../ai'
+import { chooseCardPlay, chooseMove, chooseRandomMascot } from '../ai'
 import { createInitialState } from '../gameState'
+import { MASCOTS } from '../constants'
 
 describe('chooseMove', () => {
   it('returns a valid move from the available options', () => {
@@ -9,7 +10,7 @@ describe('chooseMove', () => {
     expect(move).toHaveProperty('row')
     expect(move).toHaveProperty('col')
     expect(move.row).toBeGreaterThanOrEqual(0)
-    expect(move.row).toBeLessThan(6)
+    expect(move.row).toBeLessThan(8)
     expect(move.col).toBeGreaterThanOrEqual(0)
     expect(move.col).toBeLessThan(3)
   })
@@ -31,5 +32,12 @@ describe('chooseCardPlay', () => {
     state.hands.p2 = []
     const play = chooseCardPlay(state)
     expect(play).toBe(null)
+  })
+})
+
+describe('chooseRandomMascot', () => {
+  it('returns a valid mascot key', () => {
+    const mascot = chooseRandomMascot()
+    expect(Object.keys(MASCOTS)).toContain(mascot)
   })
 })

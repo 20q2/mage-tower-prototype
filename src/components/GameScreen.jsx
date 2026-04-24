@@ -6,26 +6,30 @@ import GameOverModal from './GameOverModal'
 import PassScreen from './PassScreen'
 import { createInitialState, gameReducer } from '../engine/gameState'
 import { getValidMoves } from '../engine/rules'
-import { chooseCardPlay, chooseMove } from '../engine/ai'
-import { PHASES } from '../engine/constants'
+import { chooseCardPlay, chooseMove, shouldUseAbility } from '../engine/ai'
+import { PHASES, MASCOTS, COLS } from '../engine/constants'
 
 const COLOR_NAMES = { white: 'White', blue: 'Blue', black: 'Black', red: 'Red', green: 'Green' }
 
-export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
+export default function GameScreen({ p1Deck, p2Deck, mode, onExit, mascots: mascotChoices }) {
   const [state, dispatch] = useReducer(gameReducer, null, () =>
-    createInitialState(p1Deck, p2Deck)
+    createInitialState(p1Deck, p2Deck, mascotChoices)
   )
 
   const [selectedCardIndex, setSelectedCardIndex] = useState(null)
   const [collegeChoice, setCollegeChoice] = useState(null)
   const [showPassScreen, setShowPassScreen] = useState(false)
   const [showLog, setShowLog] = useState(false)
+  const [abilityPrompt, setAbilityPrompt] = useState(null) // { player } when prompting
+  const [quandrixSelection, setQuandrixSelection] = useState(null) // { tile1: {row,col} } partial
+  const [prismariPrompt, setPrismariPrompt] = useState(null) // { player }
   const logBottomRef = useRef(null)
   const aiActingRef = useRef(false)
 
   const {
     grid, mascots, hands, phase, activePlayer, playTurn, turnCount, winner,
-    pendingMoves, pendingWhiteBonus, log,
+    pendingMoves, pendingWhiteBonus, log, mascotAbilities, abilityUsed,
+    silverquillImmunity,
   } = state
 
   const isAI = mode === 'ai'
@@ -38,11 +42,12 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   const p1NeedsWhiteBonus = phase === PHASES.MOVE && pendingWhiteBonus.p1
   const p2NeedsWhiteBonus = phase === PHASES.MOVE && pendingWhiteBonus.p2
 
-  // Valid moves for movement
-  const validMovesP1 = p1NeedsMove ? getValidMoves(grid, mascots.p1, 'p1') : []
-  const validMovesP2 = p2NeedsMove && !isAI ? getValidMoves(grid, mascots.p2, 'p2') : []
-  const whiteBonusMovesP1 = p1NeedsWhiteBonus ? getValidMoves(grid, mascots.p1, 'p1', { bonus: true }) : []
-  const whiteBonusMovesP2 = p2NeedsWhiteBonus && !isAI ? getValidMoves(grid, mascots.p2, 'p2', { bonus: true }) : []
+  // Valid moves for movement (pass silverquillImmunity for green wall bypass)
+  const moveOpts = { silverquillImmunity }
+  const validMovesP1 = p1NeedsMove ? getValidMoves(grid, mascots.p1, 'p1', moveOpts) : []
+  const validMovesP2 = p2NeedsMove && !isAI ? getValidMoves(grid, mascots.p2, 'p2', moveOpts) : []
+  const whiteBonusMovesP1 = p1NeedsWhiteBonus ? getValidMoves(grid, mascots.p1, 'p1', { bonus: true, silverquillImmunity }) : []
+  const whiteBonusMovesP2 = p2NeedsWhiteBonus && !isAI ? getValidMoves(grid, mascots.p2, 'p2', { bonus: true, silverquillImmunity }) : []
 
   // Which moves to highlight on board
   const highlightedMoves = [
@@ -75,18 +80,29 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
       const aiState = { ...state, activePlayer: 'p2' }
       const play = chooseCardPlay(aiState)
       if (play && hands.p2.length > 0) {
-        const card = hands.p2[play.cardIndex]
-        const playMode = card.college ? (Math.random() < 0.4 ? 'college' : 'color1') : undefined
-        dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col, playMode } })
-        if (playMode === 'college' && card.college) {
-          dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, play.row, play.col), player: 'p2' } })
-        }
+        dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col, playMode: play.playMode } })
       } else {
         dispatch({ type: 'PASS' })
       }
     }, 700)
     return () => clearTimeout(t)
   }, [isAiPlayTurn, phase, winner])
+
+  // === AI: use ability at start of move phase ===
+  useEffect(() => {
+    if (!isAI || phase !== PHASES.MOVE || winner) return
+    if (pendingWhiteBonus.p1 || pendingWhiteBonus.p2) return
+    if (pendingMoves.p2 !== null) return
+
+    // AI tries ability
+    const abilityAction = shouldUseAbility(state, 'p2')
+    if (abilityAction && !abilityUsed.p2) {
+      const t = setTimeout(() => {
+        dispatch(abilityAction)
+      }, 300)
+      return () => clearTimeout(t)
+    }
+  }, [isAI, phase, winner, pendingMoves.p2, pendingWhiteBonus, abilityUsed.p2])
 
   // === AI: submit move ===
   useEffect(() => {
@@ -108,9 +124,8 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   useEffect(() => {
     if (!isAI || !pendingWhiteBonus.p2 || winner) return
     const t = setTimeout(() => {
-      const bonusMoves = getValidMoves(grid, mascots.p2, 'p2', { bonus: true })
+      const bonusMoves = getValidMoves(grid, mascots.p2, 'p2', { bonus: true, silverquillImmunity })
       if (bonusMoves.length > 0) {
-        // Pick the one that gets closest to goal (row 7)
         const best = bonusMoves.reduce((a, b) => Math.abs(b.row - 7) < Math.abs(a.row - 7) ? b : a)
         dispatch({ type: 'WHITE_BONUS_MOVE', payload: { player: 'p2', row: best.row, col: best.col } })
       } else {
@@ -136,18 +151,35 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
 
   // Play card helper
   function playCard(cardIndex, row, col, playMode) {
-    const card = hands[playTurn][cardIndex]
     dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col, playMode } })
-    if (playMode === 'college' && card?.college) {
-      dispatch({ type: 'ACTIVATE_COLLEGE', payload: { college: card.college, params: buildCollegeParams(card.college, row, col), player: playTurn } })
-    }
     setSelectedCardIndex(null)
     setCollegeChoice(null)
+  }
+
+  // Ability activation helpers
+  function activateAbility(player, params = {}) {
+    dispatch({ type: 'USE_ABILITY', payload: { player, params } })
+    setAbilityPrompt(null)
+    setPrismariPrompt(null)
+    setQuandrixSelection(null)
   }
 
   // Tile click
   const handleTileClick = useCallback((row, col) => {
     if (winner) return
+
+    // Quandrix tile selection mode
+    if (quandrixSelection) {
+      if (!quandrixSelection.tile1) {
+        setQuandrixSelection({ ...quandrixSelection, tile1: { row, col } })
+      } else {
+        activateAbility(quandrixSelection.player, {
+          tile1: quandrixSelection.tile1,
+          tile2: { row, col },
+        })
+      }
+      return
+    }
 
     // Play phase: place card
     if (phase === PHASES.PLAY && isHumanPlayTurn && selectedCardIndex !== null) {
@@ -185,7 +217,8 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
     }
   }, [winner, phase, isHumanPlayTurn, selectedCardIndex, hands, playTurn,
       p1NeedsMove, validMovesP1, p2NeedsMove, validMovesP2,
-      p1NeedsWhiteBonus, whiteBonusMovesP1, p2NeedsWhiteBonus, whiteBonusMovesP2])
+      p1NeedsWhiteBonus, whiteBonusMovesP1, p2NeedsWhiteBonus, whiteBonusMovesP2,
+      quandrixSelection])
 
   const handleDropCard = useCallback((cardIndex, row, col) => {
     if (phase !== PHASES.PLAY || !isHumanPlayTurn || winner) return
@@ -218,12 +251,50 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
   }
   else if (phase === PHASES.RESOLVE) { statusLabel = 'Resolving...'; statusColor = '#f59e0b' }
 
+  // Ability button display
+  function renderAbilityButton(player) {
+    const ability = mascotAbilities[player]
+    if (!ability || abilityUsed[player]) return null
+    if (phase !== PHASES.MOVE) return null
+    if (pendingWhiteBonus.p1 || pendingWhiteBonus.p2) return null
+    if (isAI && player === 'p2') return null
+
+    const mascotName = MASCOTS[ability]?.name || ability
+
+    return (
+      <button
+        className="btn btn--ability"
+        onClick={() => {
+          if (ability === 'prismari') {
+            setPrismariPrompt({ player })
+          } else if (ability === 'quandrix') {
+            setQuandrixSelection({ player, tile1: null })
+          } else {
+            activateAbility(player, {})
+          }
+        }}
+        style={{
+          background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+          color: 'white',
+          padding: '6px 14px',
+          borderRadius: '6px',
+          fontWeight: 700,
+          fontSize: '11px',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        {mascotName} Ability
+      </button>
+    )
+  }
+
   return (
     <div className="game-screen">
       {/* TOP BAR */}
       <div className="top-bar">
         <button onClick={onExit} style={{ background: 'none', color: 'var(--text-muted)', fontSize: '12px', padding: '4px 8px' }}>
-          ← Menu
+          &larr; Menu
         </button>
         <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Turn {turnCount}</span>
         <motion.span
@@ -270,7 +341,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
         </div>
       )}
 
-      {/* COLLEGE CHOICE MODAL */}
+      {/* COLLEGE CHOICE MODAL — just 2 color buttons */}
       <AnimatePresence>
         {collegeChoice && (
           <motion.div
@@ -287,13 +358,9 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
                 {collegeChoice.card.name}
               </h3>
               <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '16px' }}>
-                {collegeChoice.card.college} ({collegeChoice.card.collegeColors.map(c => COLOR_NAMES[c]).join('/')})
+                Pick a color
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <button onClick={() => playCard(collegeChoice.cardIndex, collegeChoice.row, collegeChoice.col, 'college')}
-                  style={{ background: 'var(--mtg-gold)', color: 'var(--bg-dark)', padding: '10px 16px', borderRadius: '6px', fontWeight: 700, fontSize: '13px', border: 'none', cursor: 'pointer' }}>
-                  {collegeChoice.card.college.charAt(0).toUpperCase() + collegeChoice.card.college.slice(1)} Effect
-                </button>
                 {collegeChoice.card.collegeColors.map((color, i) => (
                   <button key={color}
                     onClick={() => playCard(collegeChoice.cardIndex, collegeChoice.row, collegeChoice.col, i === 0 ? 'color1' : 'color2')}
@@ -307,6 +374,67 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* PRISMARI DIRECTION MODAL */}
+      <AnimatePresence>
+        {prismariPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+            onClick={() => setPrismariPrompt(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              style={{ background: 'var(--bg-medium)', borderRadius: '12px', padding: '24px', border: '2px solid var(--accent-gold)', maxWidth: '300px', textAlign: 'center' }}
+            >
+              <h3 style={{ fontFamily: 'Cinzel, serif', color: 'var(--accent-gold)', marginBottom: '16px', fontSize: '16px' }}>
+                Kinetic Jaunt
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '16px' }}>
+                Shift your mascot left or right
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                {mascots[prismariPrompt.player].col > 0 && (
+                  <button onClick={() => activateAbility(prismariPrompt.player, { direction: 'left' })}
+                    className="btn" style={{ padding: '10px 20px' }}>Left</button>
+                )}
+                {mascots[prismariPrompt.player].col < COLS - 1 && (
+                  <button onClick={() => activateAbility(prismariPrompt.player, { direction: 'right' })}
+                    className="btn" style={{ padding: '10px 20px' }}>Right</button>
+                )}
+                <button onClick={() => setPrismariPrompt(null)}
+                  style={{ background: 'none', color: 'var(--text-muted)', padding: '8px', fontSize: '12px', border: 'none', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QUANDRIX SELECTION OVERLAY */}
+      <AnimatePresence>
+        {quandrixSelection && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0,
+              background: 'rgba(79, 70, 229, 0.15)',
+              padding: '8px 16px', textAlign: 'center', zIndex: 40,
+              color: 'white', fontSize: '13px', fontWeight: 700,
+            }}
+          >
+            {!quandrixSelection.tile1
+              ? 'Vortex Warp: Click the FIRST tile to swap'
+              : 'Now click the SECOND tile to swap with'}
+            <button onClick={() => setQuandrixSelection(null)}
+              style={{ marginLeft: '16px', background: 'none', color: '#ccc', fontSize: '12px', border: '1px solid #666', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer' }}>
+              Cancel
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -338,6 +466,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
           {p1NeedsMove && (
             <>
               <span className="hint">P1: choose your move</span>
+              {renderAbilityButton('p1')}
               {validMovesP1.map(m => (
                 <button key={`p1-${m.row}-${m.col}`} className="btn"
                   onClick={() => dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p1', row: m.row, col: m.col } })}>
@@ -349,6 +478,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
           {!isAI && p2NeedsMove && !p1NeedsMove && (
             <>
               <span className="hint">P2: choose your move</span>
+              {renderAbilityButton('p2')}
               {validMovesP2.map(m => (
                 <button key={`p2-${m.row}-${m.col}`} className="btn"
                   onClick={() => dispatch({ type: 'SUBMIT_MOVE', payload: { player: 'p2', row: m.row, col: m.col } })}>
@@ -410,13 +540,4 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit }) {
       </AnimatePresence>
     </div>
   )
-}
-
-function buildCollegeParams(college, row, col) {
-  switch (college) {
-    case 'witherbloom': return { centerRow: row, centerCol: col, wallRow: row, wallCol: col }
-    case 'prismari': return { row }
-    case 'lorehold': return { discardIndex: 0, row, col }
-    default: return {}
-  }
 }

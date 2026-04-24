@@ -4,12 +4,12 @@ import { getValidMoves, resolveTile, resolveChain, isPassable, checkWinCondition
 import { PHASES, ROWS, COLS } from '../constants'
 
 function makeTile(color) {
-  return { color, card: { name: color, color, scryfallName: 'Plains', displayName: color } }
+  return { color, card: { name: color, color, scryfallName: 'Plains', displayName: color }, stack: [] }
 }
 
 function emptyGrid() {
   return Array.from({ length: ROWS }, () =>
-    Array.from({ length: COLS }, () => ({ color: 'empty', card: null }))
+    Array.from({ length: COLS }, () => ({ color: 'empty', card: null, stack: [] }))
   )
 }
 
@@ -27,9 +27,9 @@ function resolveState(overrides = {}) {
     winner: null,
     pendingMoves: { p1: { row: 6, col: 1 }, p2: { row: 1, col: 1 } },
     pendingWhiteBonus: { p1: false, p2: false },
-    portalLinks: [],
     silverquillImmunity: null,
-    prismariBoostRow: null,
+    mascotAbilities: { p1: null, p2: null },
+    abilityUsed: { p1: false, p2: false },
     log: [],
     ...overrides,
   }
@@ -79,6 +79,13 @@ describe('GREEN', () => {
     grid[6][1] = makeTile('green')
     const moves = getValidMoves(grid, { row: 7, col: 1 }, 'p1')
     expect(moves.find(m => m.row === 6 && m.col === 1)).toBeUndefined()
+  })
+
+  it('is passable with silverquill immunity', () => {
+    const grid = emptyGrid()
+    grid[6][1] = makeTile('green')
+    const moves = getValidMoves(grid, { row: 7, col: 1 }, 'p1', { silverquillImmunity: 'p1' })
+    expect(moves.find(m => m.row === 6 && m.col === 1)).toBeDefined()
   })
 })
 
@@ -151,9 +158,23 @@ describe('BLUE', () => {
   })
 })
 
+describe('FACEDOWN', () => {
+  it('face-down tiles are passable', () => {
+    const facedownTile = { color: 'facedown', card: { name: 'Hidden' }, faceDown: true, stack: [] }
+    expect(isPassable(facedownTile)).toBe(true)
+  })
+
+  it('face-down tiles have no effect', () => {
+    const grid = emptyGrid()
+    grid[3][1] = { color: 'facedown', card: { name: 'Hidden', color: 'red' }, faceDown: true, stack: [] }
+    const result = resolveTile(grid, { row: 3, col: 1 }, 'p1', null)
+    expect(result.chain).toBe(false)
+  })
+})
+
 describe('EMPTY / COLORLESS', () => {
   it('passable, no effect', () => {
-    expect(isPassable({ color: 'empty', card: null })).toBe(true)
+    expect(isPassable({ color: 'empty', card: null, stack: [] })).toBe(true)
     const grid = emptyGrid()
     const result = resolveTile(grid, { row: 3, col: 1 }, 'p1', null)
     expect(result.chain).toBe(false)
@@ -177,5 +198,26 @@ describe('PLAY PHASE', () => {
     const state = { ...resolveState(), phase: PHASES.PLAY, playTurn: 'p1' }
     const next = gameReducer(state, { type: 'PASS' })
     expect(next.phase).toBe('move')
+  })
+})
+
+describe('CARD STACKING', () => {
+  it('playing on occupied tile pushes old card to stack', () => {
+    const state = resolveState({ phase: PHASES.PLAY, playTurn: 'p1' })
+    state.hands.p1 = [
+      { name: 'Card A', color: 'red', scryfallName: 'Mountain', id: 'a' },
+      { name: 'Card B', color: 'blue', scryfallName: 'Island', id: 'b' },
+    ]
+    // Play first card
+    let next = gameReducer(state, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 5, col: 1 } })
+    expect(next.grid[5][1].card.name).toBe('Card A')
+    expect(next.grid[5][1].stack).toHaveLength(0)
+
+    // Play second card on same tile (from p2's turn now)
+    next.hands.p2 = [{ name: 'Card C', color: 'green', scryfallName: 'Forest', id: 'c' }]
+    next = gameReducer(next, { type: 'PLAY_CARD', payload: { cardIndex: 0, row: 5, col: 1 } })
+    expect(next.grid[5][1].card.name).toBe('Card C')
+    expect(next.grid[5][1].stack).toHaveLength(1)
+    expect(next.grid[5][1].stack[0].name).toBe('Card A')
   })
 })

@@ -12,6 +12,14 @@ export const COLLEGES = {
   prismari: { colors: ['red', 'blue'], name: 'Prismari' },
 }
 
+export const MASCOTS = {
+  witherbloom: { name: 'Witherbloom', description: 'Wither and Bloom — clear a 3x3 area' },
+  prismari: { name: 'Prismari', description: 'Kinetic Jaunt — shift mascot left or right' },
+  lorehold: { name: 'Lorehold', description: 'Shared Memories — peel stacks & flip face-down cards in 3x3' },
+  quandrix: { name: 'Quandrix', description: 'Vortex Warp — swap 2 tiles in a 3x3 area' },
+  silverquill: { name: 'Silverquill', description: 'Silvery Barbs — ignore all tile effects this move' },
+}
+
 // Turn flow:
 // 1. Both draw 1 card
 // 2. Play phase: active player plays or passes → opponent plays or passes → repeat until pass

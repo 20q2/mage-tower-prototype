@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { DECKS } from '../engine/decks'
+import { MASCOTS } from '../engine/constants'
 
 const deckKeys = Object.keys(DECKS)
+const mascotKeys = Object.keys(MASCOTS)
 
 export default function MainMenu({ onStartGame }) {
   const [mode, setMode] = useState('ai')
   const [p1Deck, setP1Deck] = useState(deckKeys[0])
   const [p2Deck, setP2Deck] = useState(deckKeys[1])
+  const [p1Mascot, setP1Mascot] = useState(mascotKeys[0])
+  const [p2Mascot, setP2Mascot] = useState(mascotKeys[1])
 
   return (
     <div style={{
@@ -70,7 +74,7 @@ export default function MainMenu({ onStartGame }) {
       </div>
 
       {/* Deck Select */}
-      <div style={{ display: 'flex', gap: '32px', marginBottom: '40px' }}>
+      <div style={{ display: 'flex', gap: '32px', marginBottom: '24px' }}>
         <DeckPicker
           label={mode === 'ai' ? 'Your Deck' : 'Player 1 Deck'}
           selected={p1Deck}
@@ -78,6 +82,18 @@ export default function MainMenu({ onStartGame }) {
         />
         {mode === 'hotseat' && (
           <DeckPicker label="Player 2 Deck" selected={p2Deck} onChange={setP2Deck} />
+        )}
+      </div>
+
+      {/* Mascot Select */}
+      <div style={{ display: 'flex', gap: '32px', marginBottom: '40px' }}>
+        <MascotPicker
+          label={mode === 'ai' ? 'Your Mascot' : 'P1 Mascot'}
+          selected={p1Mascot}
+          onChange={setP1Mascot}
+        />
+        {mode === 'hotseat' && (
+          <MascotPicker label="P2 Mascot" selected={p2Mascot} onChange={setP2Mascot} />
         )}
       </div>
 
@@ -89,7 +105,15 @@ export default function MainMenu({ onStartGame }) {
           const aiDeck = mode === 'ai'
             ? deckKeys[Math.floor(Math.random() * deckKeys.length)]
             : p2Deck
-          onStartGame({ mode, p1Deck, p2Deck: aiDeck })
+          const aiMascot = mode === 'ai'
+            ? mascotKeys[Math.floor(Math.random() * mascotKeys.length)]
+            : p2Mascot
+          onStartGame({
+            mode,
+            p1Deck,
+            p2Deck: aiDeck,
+            mascots: { p1: p1Mascot, p2: aiMascot },
+          })
         }}
         style={{
           background: 'linear-gradient(135deg, var(--accent-gold), #b8860b)',
@@ -141,6 +165,47 @@ function DeckPicker({ label, selected, onChange }) {
             <div style={{ fontWeight: 700 }}>{DECKS[key].name}</div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
               {DECKS[key].description}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MascotPicker({ label, selected, onChange }) {
+  return (
+    <div>
+      <h3 style={{
+        color: 'var(--text-primary)',
+        marginBottom: '12px',
+        fontSize: '14px',
+        textAlign: 'center',
+      }}>
+        {label}
+      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {mascotKeys.map((key) => (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            style={{
+              padding: '10px 16px',
+              borderRadius: 'var(--radius)',
+              fontWeight: 600,
+              fontSize: '12px',
+              textAlign: 'left',
+              background: selected === key ? 'var(--bg-light)' : 'var(--bg-medium)',
+              color: 'var(--text-primary)',
+              border: selected === key
+                ? '2px solid var(--accent-gold)'
+                : '2px solid transparent',
+              minWidth: '200px',
+            }}
+          >
+            <div style={{ fontWeight: 700 }}>{MASCOTS[key].name}</div>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+              {MASCOTS[key].description}
             </div>
           </button>
         ))}

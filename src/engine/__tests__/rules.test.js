@@ -3,7 +3,7 @@ import { resolveTile, resolveChain, getValidMoves, checkWinCondition, isPassable
 import { P1_GOAL_ROW, P2_GOAL_ROW } from '../constants'
 
 function makeTile(color) {
-  return { color, card: { name: 'Test', color, scryfallName: 'Plains' } }
+  return { color, card: { name: 'Test', color, scryfallName: 'Plains' }, stack: [] }
 }
 
 function makeGrid(defaultColor = 'colorless') {
@@ -21,6 +21,18 @@ describe('isPassable', () => {
     for (const color of ['white', 'blue', 'black', 'red', 'colorless']) {
       expect(isPassable(makeTile(color))).toBe(true)
     }
+  })
+
+  it('returns true for face-down tiles', () => {
+    expect(isPassable({ color: 'facedown', card: { name: 'Test' }, faceDown: true, stack: [] })).toBe(true)
+  })
+
+  it('returns true for green tiles with silverquill immunity', () => {
+    expect(isPassable(makeTile('green'), 'p1', 'p1')).toBe(true)
+  })
+
+  it('returns false for green tiles when immunity belongs to other player', () => {
+    expect(isPassable(makeTile('green'), 'p2', 'p1')).toBe(false)
   })
 })
 
@@ -88,6 +100,14 @@ describe('resolveTile', () => {
     expect(result.newPos).toEqual({ row: 0, col: 1 })
     expect(result.chain).toBe(false)
   })
+
+  it('face-down tile has no effect', () => {
+    const grid = makeGrid()
+    grid[3][1] = { color: 'facedown', card: { name: 'Hidden', color: 'red' }, faceDown: true, stack: [] }
+    const result = resolveTile(grid, { row: 3, col: 1 }, 'p1', null)
+    expect(result.chain).toBe(false)
+    expect(result.newPos).toEqual({ row: 3, col: 1 })
+  })
 })
 
 describe('resolveChain', () => {
@@ -122,6 +142,13 @@ describe('getValidMoves', () => {
     grid[2][1] = makeTile('green')
     const moves = getValidMoves(grid, { row: 3, col: 1 }, 'p1')
     expect(moves).not.toContainEqual(expect.objectContaining({ row: 2, col: 1 }))
+  })
+
+  it('allows moves into green walls with silverquill immunity', () => {
+    const grid = makeGrid()
+    grid[2][1] = makeTile('green')
+    const moves = getValidMoves(grid, { row: 3, col: 1 }, 'p1', { silverquillImmunity: 'p1' })
+    expect(moves).toContainEqual(expect.objectContaining({ row: 2, col: 1 }))
   })
 
   it('excludes moves off the board edge', () => {

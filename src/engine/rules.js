@@ -1,19 +1,23 @@
 import { ROWS, COLS, CHAIN_CAP, P1_GOAL_ROW, P2_GOAL_ROW } from './constants'
 
-export function isPassable(tile) {
+export function isPassable(tile, silverquillImmunity, movingPlayer) {
+  // Face-down tiles are passable
+  if (tile.faceDown) return true
+  // Silverquill immunity lets you walk through green walls
+  if (silverquillImmunity && silverquillImmunity === movingPlayer && tile.color === 'green') return true
   return tile.color !== 'green'
 }
 
 /**
  * Resolve what happens when a mascot enters a tile.
- * Returns: { newPos, chain, draw, whiteBonus, lateralOptions? }
- *   chain: true if mascot is pushed to newPos and should resolve again
- *   draw: true if player draws a card
- *   whiteBonus: true if player gets a free extra step in any direction
+ * Returns: { newPos, chain, draw, whiteBonus }
  */
-export function resolveTile(grid, pos, movingPlayer, silverquillImmunity, extras = {}) {
+export function resolveTile(grid, pos, movingPlayer, silverquillImmunity) {
   const tile = grid[pos.row][pos.col]
   const noEffect = { newPos: { ...pos }, chain: false }
+
+  // Face-down tiles have no terrain effect
+  if (tile.faceDown) return noEffect
 
   if (silverquillImmunity === movingPlayer) {
     return noEffect
@@ -22,39 +26,23 @@ export function resolveTile(grid, pos, movingPlayer, silverquillImmunity, extras
   const forwardDir = movingPlayer === 'p1' ? -1 : 1
   const backwardDir = -forwardDir
 
-  const prismariMultiplier =
-    extras.prismariBoostRow != null && pos.row === extras.prismariBoostRow ? 2 : 1
-
   switch (tile.color) {
     case 'red': {
-      const steps = 1 * prismariMultiplier
-      const newRow = pos.row + forwardDir * steps
+      const newRow = pos.row + forwardDir
       const clampedRow = Math.max(0, Math.min(ROWS - 1, newRow))
       if (clampedRow === pos.row) return noEffect
       return { newPos: { row: clampedRow, col: pos.col }, chain: true }
     }
     case 'black': {
-      const steps = 1 * prismariMultiplier
-      const newRow = pos.row + backwardDir * steps
+      const newRow = pos.row + backwardDir
       const clampedRow = Math.max(0, Math.min(ROWS - 1, newRow))
       if (clampedRow === pos.row) return noEffect
       return { newPos: { row: clampedRow, col: pos.col }, chain: true }
     }
     case 'white': {
-      // White = bonus step. Player gets a free move in any direction (F/B/L/R).
-      // We return whiteBonus flag; the game state handles the extra move.
       return { newPos: { ...pos }, chain: false, whiteBonus: true }
     }
     case 'blue': {
-      const portals = extras.portalLinks || []
-      if (portals.length >= 2) {
-        const currentIdx = portals.findIndex(p => p.row === pos.row && p.col === pos.col)
-        if (currentIdx !== -1) {
-          const nextIdx = (currentIdx + 1) % portals.length
-          const dest = portals[nextIdx]
-          return { newPos: { row: dest.row, col: dest.col }, chain: true, portal: true, draw: true }
-        }
-      }
       return { ...noEffect, draw: true }
     }
     case 'colorless':
@@ -67,7 +55,7 @@ export function resolveTile(grid, pos, movingPlayer, silverquillImmunity, extras
  * Resolve a chain of tile effects starting from a position.
  * Returns: { finalPos, steps, drawCount, whiteBonus }
  */
-export function resolveChain(grid, startPos, movingPlayer, silverquillImmunity, extras = {}) {
+export function resolveChain(grid, startPos, movingPlayer, silverquillImmunity) {
   const steps = [{ ...startPos }]
   let currentPos = { ...startPos }
   let depth = 0
@@ -75,7 +63,7 @@ export function resolveChain(grid, startPos, movingPlayer, silverquillImmunity, 
   let whiteBonus = false
 
   while (depth < CHAIN_CAP) {
-    const result = resolveTile(grid, currentPos, movingPlayer, silverquillImmunity, extras)
+    const result = resolveTile(grid, currentPos, movingPlayer, silverquillImmunity)
     if (result.draw) drawCount++
     if (result.whiteBonus) whiteBonus = true
     if (!result.chain) {
@@ -93,7 +81,7 @@ export function resolveChain(grid, startPos, movingPlayer, silverquillImmunity, 
  * Get valid moves for a mascot. Standard move = forward, left, or right.
  * If bonus is true (white tile), also allows backward.
  */
-export function getValidMoves(grid, mascotPos, activePlayer, { bonus = false } = {}) {
+export function getValidMoves(grid, mascotPos, activePlayer, { bonus = false, silverquillImmunity = null } = {}) {
   const moves = []
   const forwardDir = activePlayer === 'p1' ? -1 : 1
 
@@ -111,7 +99,7 @@ export function getValidMoves(grid, mascotPos, activePlayer, { bonus = false } =
     if (
       candidate.row >= 0 && candidate.row < ROWS &&
       candidate.col >= 0 && candidate.col < COLS &&
-      isPassable(grid[candidate.row][candidate.col])
+      isPassable(grid[candidate.row][candidate.col], silverquillImmunity, activePlayer)
     ) {
       moves.push(candidate)
     }
