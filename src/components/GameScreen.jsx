@@ -80,7 +80,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit, mascots: masc
       const aiState = { ...state, activePlayer: 'p2' }
       const play = chooseCardPlay(aiState)
       if (play && hands.p2.length > 0) {
-        dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col, playMode: play.playMode } })
+        dispatch({ type: 'PLAY_CARD', payload: { cardIndex: play.cardIndex, row: play.row, col: play.col, playMode: play.playMode, discardIndices: play.discardIndices || [] } })
       } else {
         dispatch({ type: 'PASS' })
       }
@@ -149,9 +149,23 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit, mascots: masc
     return () => clearTimeout(t)
   }, [phase, winner])
 
-  // Play card helper
+  // Play card helper — auto-selects discard from end of hand
   function playCard(cardIndex, row, col, playMode) {
-    dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col, playMode } })
+    const player = playTurn
+    const discardCost = state.playsThisTurn[player] // 0 for 1st, 1 for 2nd, 2 for 3rd...
+    const hand = hands[player]
+
+    // Check if player can afford the cost
+    // They need: 1 card to play + discardCost cards to discard
+    if (hand.length < 1 + discardCost) return // Can't afford
+
+    // Auto-pick discards: pick cards from end of hand (excluding the played card)
+    const discardIndices = []
+    for (let i = hand.length - 1; i >= 0 && discardIndices.length < discardCost; i--) {
+      if (i !== cardIndex) discardIndices.push(i)
+    }
+
+    dispatch({ type: 'PLAY_CARD', payload: { cardIndex, row, col, playMode, discardIndices } })
     setSelectedCardIndex(null)
     setCollegeChoice(null)
   }
@@ -443,10 +457,17 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit, mascots: masc
       <div className="bottom-bar">
         <div className="controls-strip">
           {/* Play phase */}
-          {phase === PHASES.PLAY && isHumanPlayTurn && (
-            <>
+          {phase === PHASES.PLAY && isHumanPlayTurn && (() => {
+            const cost = state.playsThisTurn[playTurn]
+            const canAfford = hands[playTurn].length >= 1 + cost
+            const costLabel = cost === 0 ? 'free' : `costs ${cost} discard${cost > 1 ? 's' : ''}`
+            return <>
               <span className="hint">
-                {selectedCardIndex !== null ? 'Click a tile to place' : `${playTurnName}: play a card or pass`}
+                {!canAfford
+                  ? `Not enough cards to play (need ${1 + cost})`
+                  : selectedCardIndex !== null
+                    ? `Click a tile to place (${costLabel})`
+                    : `${playTurnName}: play a card (${costLabel}) or pass`}
               </span>
               <button className="btn btn--primary" onClick={() => {
                 setSelectedCardIndex(null)
@@ -455,7 +476,7 @@ export default function GameScreen({ p1Deck, p2Deck, mode, onExit, mascots: masc
                 Pass
               </button>
             </>
-          )}
+          })()}
 
           {/* Waiting for AI/opponent to play */}
           {phase === PHASES.PLAY && !isHumanPlayTurn && (

@@ -33,10 +33,10 @@ describe('createInitialState', () => {
     expect(state.mascots.p2).toEqual({ row: 0, col: 1 })
   })
 
-  it('deals 3 cards each', () => {
+  it('deals 5 cards each', () => {
     const state = createInitialState('lorehold', 'witherbloom')
-    expect(state.hands.p1).toHaveLength(3)
-    expect(state.hands.p2).toHaveLength(3)
+    expect(state.hands.p1).toHaveLength(5)
+    expect(state.hands.p2).toHaveLength(5)
   })
 
   it('has mascot abilities and abilityUsed in state', () => {
@@ -59,8 +59,8 @@ describe('gameReducer — alternating play + simultaneous move', () => {
   it('DRAW_CARDS: both draw, enters play phase', () => {
     const next = gameReducer(state, { type: 'DRAW_CARDS' })
     expect(next.phase).toBe('play')
-    expect(next.hands.p1).toHaveLength(4)
-    expect(next.hands.p2).toHaveLength(4)
+    expect(next.hands.p1).toHaveLength(6)
+    expect(next.hands.p2).toHaveLength(6)
     expect(next.playTurn).toBe('p1')
   })
 

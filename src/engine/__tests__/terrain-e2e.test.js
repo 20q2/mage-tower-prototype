@@ -30,6 +30,7 @@ function resolveState(overrides = {}) {
     silverquillImmunity: null,
     mascotAbilities: { p1: null, p2: null },
     abilityUsed: { p1: false, p2: false },
+    playsThisTurn: { p1: 0, p2: 0 },
     log: [],
     ...overrides,
   }

@@ -48,9 +48,13 @@ export function chooseMove(state) {
 
 // AI places 1 card — evaluates how placement helps own path and hurts opponent
 export function chooseCardPlay(state) {
-  const { activePlayer, grid, mascots, hands } = state
+  const { activePlayer, grid, mascots, hands, playsThisTurn = { p1: 0, p2: 0 } } = state
   const hand = hands[activePlayer]
-  if (hand.length === 0) return null
+  const discardCost = playsThisTurn[activePlayer] || 0
+  // Need 1 card to play + discardCost cards to discard
+  if (hand.length < 1 + discardCost) return null
+  // AI won't play if cost is too high relative to hand size (keep at least 2 cards)
+  if (discardCost > 0 && hand.length < 3 + discardCost) return null
 
   const opponent = activePlayer === 'p1' ? 'p2' : 'p1'
   const myMascot = mascots[activePlayer]
@@ -120,6 +124,15 @@ export function chooseCardPlay(state) {
         }
       }
     }
+  }
+
+  // Add discard indices if there's a cost
+  if (bestPlay && discardCost > 0) {
+    const discardIndices = []
+    for (let i = hand.length - 1; i >= 0 && discardIndices.length < discardCost; i--) {
+      if (i !== bestPlay.cardIndex) discardIndices.push(i)
+    }
+    bestPlay.discardIndices = discardIndices
   }
 
   return bestPlay

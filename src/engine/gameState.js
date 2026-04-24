@@ -32,9 +32,9 @@ export function createInitialState(p1DeckKey, p2DeckKey, mascotChoices = {}) {
     Array.from({ length: COLS }, () => ({ color: 'empty', card: null, stack: [] }))
   )
 
-  // Deal starting hands (3 each)
-  const p1Hand = p1Cards.splice(0, 3)
-  const p2Hand = p2Cards.splice(0, 3)
+  // Deal starting hands (5 each)
+  const p1Hand = p1Cards.splice(0, 5)
+  const p2Hand = p2Cards.splice(0, 5)
 
   // Place face-down cards in center column (col 1), all 8 rows
   // P1's 4 cards fill rows 4-7 center, P2's 4 cards fill rows 0-3 center
@@ -72,6 +72,8 @@ export function createInitialState(p1DeckKey, p2DeckKey, mascotChoices = {}) {
       p2: mascotChoices.p2 || null,
     },
     abilityUsed: { p1: false, p2: false },
+    // Escalating play cost: 1st free, 2nd costs 1 discard, 3rd costs 2, etc.
+    playsThisTurn: { p1: 0, p2: 0 },
     log: ['Game started!'],
   }
 }
@@ -107,12 +109,25 @@ export function gameReducer(state, action) {
     }
 
     // === PLAY_CARD: current playTurn player places a card ===
+    // discardIndices: array of card indices to discard as cost (for 2nd+ spell)
     case 'PLAY_CARD': {
-      const { cardIndex, row, col, playMode } = action.payload
+      const { cardIndex, row, col, playMode, discardIndices = [] } = action.payload
       const player = state.playTurn
       const hand = [...state.hands[player]]
-      const card = hand[cardIndex]
-      hand.splice(cardIndex, 1)
+
+      // Remove discarded cards first (highest index first to avoid shifting)
+      const sortedDiscards = [...discardIndices].sort((a, b) => b - a)
+      const discardedCards = []
+      for (const idx of sortedDiscards) {
+        if (idx !== cardIndex && idx >= 0 && idx < hand.length) {
+          discardedCards.push(hand.splice(idx, 1)[0])
+        }
+      }
+
+      // Now find the played card (index may have shifted)
+      const adjustedIndex = hand.findIndex(c => c === state.hands[player][cardIndex])
+      const card = hand[adjustedIndex !== -1 ? adjustedIndex : cardIndex]
+      hand.splice(adjustedIndex !== -1 ? adjustedIndex : cardIndex, 1)
 
       const grid = state.grid.map(r => r.map(t => ({ ...t, stack: [...(t.stack || [])] })))
       const oldTile = grid[row][col]
@@ -137,13 +152,21 @@ export function gameReducer(state, action) {
       grid[row][col] = { color: tileColor, card: tileCard, stack: newStack }
 
       const otherPlayer = player === 'p1' ? 'p2' : 'p1'
+      const newPlays = { ...state.playsThisTurn, [player]: state.playsThisTurn[player] + 1 }
+      const discard = [...state.discard, ...discardedCards]
+
+      const costMsg = discardedCards.length > 0
+        ? ` (discarded ${discardedCards.length} card${discardedCards.length > 1 ? 's' : ''} as cost)`
+        : ''
 
       return {
         ...state,
         grid,
         hands: { ...state.hands, [player]: hand },
+        discard,
         playTurn: otherPlayer,
-        log: [...state.log, logMsg],
+        playsThisTurn: newPlays,
+        log: [...state.log, logMsg + costMsg],
       }
     }
 
@@ -399,7 +422,8 @@ export function gameReducer(state, action) {
         phase: PHASES.DRAW,
         turnCount: state.turnCount + 1,
         silverquillImmunity: null, // Reset each turn
-        abilityUsed: { p1: false, p2: false }, // Reset abilities each round
+        abilityUsed: { p1: false, p2: false },
+        playsThisTurn: { p1: 0, p2: 0 },
         pendingMoves: { p1: null, p2: null },
         pendingWhiteBonus: { p1: false, p2: false },
         playTurn: null,
