@@ -6,7 +6,7 @@ import { P1_GOAL_ROW, P2_GOAL_ROW } from '../engine/constants'
 const EFFECT_LABELS = {
   white: 'Slide L/R',
   red: '+1 Forward',
-  black: '-1 Back',
+  black: '-1 + Discard',
   green: 'WALL',
   blue: 'Draw 1',
   colorless: '',

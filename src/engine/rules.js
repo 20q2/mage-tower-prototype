@@ -40,7 +40,7 @@ export function resolveTile(grid, pos, movingPlayer, silverquillImmunity) {
       if (newRow < 0 || newRow >= ROWS) return noEffect
       const destTile = grid[newRow][pos.col]
       if (!isPassable(destTile, silverquillImmunity, movingPlayer)) return noEffect
-      return { newPos: { row: newRow, col: pos.col }, chain: true }
+      return { newPos: { row: newRow, col: pos.col }, chain: true, blackDiscard: true }
     }
     case 'white': {
       return { newPos: { ...pos }, chain: false, whiteBonus: true }
@@ -63,21 +63,23 @@ export function resolveChain(grid, startPos, movingPlayer, silverquillImmunity) 
   let currentPos = { ...startPos }
   let depth = 0
   let drawCount = 0
+  let blackDiscardCount = 0
   let whiteBonus = false
 
   while (depth < CHAIN_CAP) {
     const result = resolveTile(grid, currentPos, movingPlayer, silverquillImmunity)
     if (result.draw) drawCount++
+    if (result.blackDiscard) blackDiscardCount++
     if (result.whiteBonus) whiteBonus = true
     if (!result.chain) {
-      return { finalPos: currentPos, steps, drawCount, whiteBonus }
+      return { finalPos: currentPos, steps, drawCount, blackDiscardCount, whiteBonus }
     }
     currentPos = result.newPos
     steps.push({ ...currentPos })
     depth++
   }
 
-  return { finalPos: currentPos, steps, drawCount, whiteBonus }
+  return { finalPos: currentPos, steps, drawCount, blackDiscardCount, whiteBonus }
 }
 
 /**

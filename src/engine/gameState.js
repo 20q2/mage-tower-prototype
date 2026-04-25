@@ -336,6 +336,16 @@ export function gameReducer(state, action) {
           if (drawn.length > 0) logEntries.push(`  Blue tile — drew ${drawn.length} card(s)!`)
         }
 
+        // Black discard — mascot owner loses cards
+        if (chain.blackDiscardCount > 0) {
+          const hand = [...hands[player]]
+          const discarded = hand.splice(-Math.min(chain.blackDiscardCount, hand.length))
+          hands = { ...hands, [player]: hand }
+          const discard = [...state.discard, ...discarded]
+          state = { ...state, discard }
+          if (discarded.length > 0) logEntries.push(`  Black tile — discarded ${discarded.length} card(s)!`)
+        }
+
         // White bonus
         if (chain.whiteBonus) {
           pendingWhiteBonus[player] = true
@@ -382,6 +392,12 @@ export function gameReducer(state, action) {
         hand.push(...drawn)
         hands = { ...hands, [player]: hand }
         decks = { ...decks, [player]: deck }
+      }
+      if (chain.blackDiscardCount > 0) {
+        const hand = [...hands[player]]
+        const discarded = hand.splice(-Math.min(chain.blackDiscardCount, hand.length))
+        hands = { ...hands, [player]: hand }
+        if (discarded.length > 0) logEntries.push(`  Black tile — discarded ${discarded.length} card(s)!`)
       }
 
       const pendingWhiteBonus = { ...state.pendingWhiteBonus, [player]: false }
