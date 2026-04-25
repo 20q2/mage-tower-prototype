@@ -77,11 +77,19 @@ export function chooseCardPlay(state) {
         for (let col = 0; col < COLS; col++) {
           let score = 0
 
-          // Red ahead of me = speed lane
+          // Red ahead of me = speed lane (but NOT if a wall is in front of it)
           if (color === 'red') {
             if (col === myMascot.col && ((activePlayer === 'p1' && row < myMascot.row) || (activePlayer === 'p2' && row > myMascot.row))) {
-              score += 4
-              if (row === myMascot.row + forwardDir) score += 3
+              // Check if the tile red would push INTO is blocked
+              const pushRow = row + forwardDir
+              const pushBlocked = pushRow < 0 || pushRow >= ROWS ||
+                (grid[pushRow]?.[col]?.color === 'green')
+              if (pushBlocked) {
+                score -= 2 // Red into a wall is useless
+              } else {
+                score += 4
+                if (row === myMascot.row + forwardDir) score += 3
+              }
             }
           }
 

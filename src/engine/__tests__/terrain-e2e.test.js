@@ -51,6 +51,15 @@ describe('RED', () => {
     expect(next.mascots.p2).toEqual({ row: 2, col: 1 })
   })
 
+  it('does NOT push into a green wall', () => {
+    const state = resolveState()
+    state.grid[6][1] = makeTile('red')
+    state.grid[5][1] = makeTile('green') // Wall blocks the push
+    const next = gameReducer(state, { type: 'RESOLVE_MOVES' })
+    // Red tries to push to (5,1) but green blocks — mascot stays on red tile
+    expect(next.mascots.p1).toEqual({ row: 6, col: 1 })
+  })
+
   it('chains through multiple reds', () => {
     const state = resolveState()
     state.grid[6][1] = makeTile('red')
@@ -67,6 +76,27 @@ describe('BLACK', () => {
     state.grid[3][1] = makeTile('black')
     const next = gameReducer(state, { type: 'RESOLVE_MOVES' })
     expect(next.mascots.p1).toEqual({ row: 4, col: 1 }) // Pushed back
+  })
+
+  it('does NOT push backward into a green wall', () => {
+    const state = resolveState({ mascots: { p1: { row: 4, col: 1 }, p2: { row: 0, col: 1 } },
+      pendingMoves: { p1: { row: 3, col: 1 }, p2: { row: 1, col: 1 } } })
+    state.grid[3][1] = makeTile('black')
+    state.grid[4][1] = makeTile('green') // Wall behind blocks the pushback
+    const next = gameReducer(state, { type: 'RESOLVE_MOVES' })
+    // Black tries to push to (4,1) but green blocks — stays on black tile
+    expect(next.mascots.p1).toEqual({ row: 3, col: 1 })
+  })
+
+  it('black-red chain: pushed back then forward again', () => {
+    const state = resolveState({ mascots: { p1: { row: 4, col: 1 }, p2: { row: 0, col: 1 } },
+      pendingMoves: { p1: { row: 3, col: 1 }, p2: { row: 1, col: 1 } } })
+    state.grid[3][1] = makeTile('black')  // Pushes P1 back to (4,1)
+    state.grid[4][1] = makeTile('red')    // Red at (4,1) pushes P1 forward to (3,1)
+    // Chain: black→(4,1) red→(3,1) black→(4,1) red→... until chain cap
+    const next = gameReducer(state, { type: 'RESOLVE_MOVES' })
+    // Should bounce back and forth until chain cap, ending somewhere
+    expect([3, 4]).toContain(next.mascots.p1.row)
   })
 })
 

@@ -29,15 +29,18 @@ export function resolveTile(grid, pos, movingPlayer, silverquillImmunity) {
   switch (tile.color) {
     case 'red': {
       const newRow = pos.row + forwardDir
-      const clampedRow = Math.max(0, Math.min(ROWS - 1, newRow))
-      if (clampedRow === pos.row) return noEffect
-      return { newPos: { row: clampedRow, col: pos.col }, chain: true }
+      if (newRow < 0 || newRow >= ROWS) return noEffect
+      // Can't push into a green wall (unless silverquill immune)
+      const destTile = grid[newRow][pos.col]
+      if (!isPassable(destTile, silverquillImmunity, movingPlayer)) return noEffect
+      return { newPos: { row: newRow, col: pos.col }, chain: true }
     }
     case 'black': {
       const newRow = pos.row + backwardDir
-      const clampedRow = Math.max(0, Math.min(ROWS - 1, newRow))
-      if (clampedRow === pos.row) return noEffect
-      return { newPos: { row: clampedRow, col: pos.col }, chain: true }
+      if (newRow < 0 || newRow >= ROWS) return noEffect
+      const destTile = grid[newRow][pos.col]
+      if (!isPassable(destTile, silverquillImmunity, movingPlayer)) return noEffect
+      return { newPos: { row: newRow, col: pos.col }, chain: true }
     }
     case 'white': {
       return { newPos: { ...pos }, chain: false, whiteBonus: true }
