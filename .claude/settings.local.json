@@ -8,7 +8,10 @@
       "Bash(git commit:*)",
       "Bash(npx vite:*)",
       "Bash(gh api:*)",
-      "Bash(where gh:*)"
+      "Bash(where gh:*)",
+      "Bash(npm ci:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }
